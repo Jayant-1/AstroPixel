@@ -20,7 +20,8 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api"
 
     # Database
-    DATABASE_URL: str
+    # A sensible default for local development; production should set DATABASE_URL
+    DATABASE_URL: str = "sqlite:///./nasa_explorer.db"
     DB_HOST: str = "localhost"
     DB_PORT: int = 5432
     DB_NAME: str = "nasa_explorer"
@@ -77,7 +78,8 @@ class Settings(BaseSettings):
     AWS_REGION: str = "us-east-1"
 
     class Config:
-        env_file = ".env"
+        # Ensure the .env in the project root (Backend/.env) is loaded
+        env_file = str(Path(__file__).resolve().parent.parent / ".env")
         case_sensitive = True
 
     def __init__(self, **kwargs):
