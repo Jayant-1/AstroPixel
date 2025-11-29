@@ -61,24 +61,47 @@ def create_spatial_indexes() -> None:
 
     try:
         with engine.connect() as conn:
-            # Create spatial indexes (PostGIS only)
-            conn.execute(
+            # Only create spatial indexes if the corresponding columns exist.
+            # This avoids errors when running against a Postgres database
+            # where the geometry/bounds columns are not present (e.g., migrations
+            # not applied or models configured for SQLite compatibility).
+            has_annotations_geometry = conn.execute(
                 text(
-                    """
-                CREATE INDEX IF NOT EXISTS idx_annotations_geometry 
-                ON annotations USING GIST(geometry)
-            """
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name='annotations' AND column_name='geometry'"
                 )
-            )
-            conn.execute(
+            ).fetchone()
+
+            if has_annotations_geometry:
+                conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS idx_annotations_geometry "
+                        "ON annotations USING GIST(geometry)"
+                    )
+                )
+                logger.info("Created idx_annotations_geometry")
+            else:
+                logger.info("Skipping idx_annotations_geometry (column not present)")
+
+            has_datasets_bounds = conn.execute(
                 text(
-                    """
-                CREATE INDEX IF NOT EXISTS idx_datasets_bounds 
-                ON datasets USING GIST(bounds)
-            """
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name='datasets' AND column_name='bounds'"
                 )
-            )
+            ).fetchone()
+
+            if has_datasets_bounds:
+                conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS idx_datasets_bounds "
+                        "ON datasets USING GIST(bounds)"
+                    )
+                )
+                logger.info("Created idx_datasets_bounds")
+            else:
+                logger.info("Skipping idx_datasets_bounds (column not present)")
+
             conn.commit()
-            logger.info("Spatial indexes created successfully")
+            logger.info("Spatial indexes creation step completed")
     except Exception as e:
         logger.warning(f"Could not create spatial indexes: {e}")
