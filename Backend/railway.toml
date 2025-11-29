@@ -1,3 +1,3 @@
 [build]
 builder = "DOCKERFILE"
-dockerfile = "Dockerfile.railway"
+dockerfile = "Dockerfile"
