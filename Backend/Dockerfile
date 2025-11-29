@@ -27,12 +27,9 @@ COPY . .
 # Create necessary directories
 RUN mkdir -p uploads tiles datasets temp
 
-# Expose port
+# Expose port (informational)
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD python -c "import requests; requests.get('http://localhost:8000/api/health')"
-
 # Run application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+# Use shell form so $PORT (provided by Render) is expanded. Reduce workers to 1 to lower memory usage on small instances.
+CMD uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
