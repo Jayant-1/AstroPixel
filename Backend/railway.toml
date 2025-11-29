@@ -1,4 +1,3 @@
 [build]
-builder = "NIXPACKS"
-buildCommand = "docker build -t myapp -f Dockerfile ."
-startCommand = "uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 4"
+builder = "DOCKERFILE"
+dockerfile = "Dockerfile.railway"
