@@ -1,3 +1,4 @@
 [build]
 builder = "DOCKERFILE"
-dockerfile = "Dockerfile"
+dockerfile = "./Dockerfile"
+context = "."
