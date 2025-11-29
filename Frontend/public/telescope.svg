@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <defs>
+        <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+            <stop offset="50%" style="stop-color:#8b5cf6;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#ec4899;stop-opacity:1" />
+        </linearGradient>
+    </defs>
+
+    <!-- Telescope body -->
+    <rect x="20" y="40" width="50" height="12" fill="url(#grad1)" rx="2" />
+
+    <!-- Telescope lens -->
+    <circle cx="72" cy="46" r="8" fill="url(#grad1)" opacity="0.8" />
+
+    <!-- Telescope base -->
+    <path d="M 30 52 L 25 70 L 35 70 Z" fill="url(#grad1)" />
+    <path d="M 50 52 L 45 70 L 55 70 Z" fill="url(#grad1)" />
+
+    <!-- Stars -->
+    <circle cx="15" cy="20" r="2" fill="#fff" />
+    <circle cx="85" cy="25" r="1.5" fill="#fff" />
+    <circle cx="75" cy="15" r="1" fill="#fff" />
+    <circle cx="25" cy="15" r="1.5" fill="#fff" />
+</svg>
