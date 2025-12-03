@@ -26,7 +26,9 @@ class CloudStorage:
         self.enabled = settings.USE_S3
         self.client = None
         self.bucket_name = settings.AWS_BUCKET_NAME
-        self.public_url = getattr(settings, 'R2_PUBLIC_URL', None)
+        self.public_url = getattr(settings, 'R2_PUBLIC_URL', None) or ""
+        
+        logger.info(f"CloudStorage init: USE_S3={settings.USE_S3}, bucket={self.bucket_name}, public_url={self.public_url}")
         
         if self.enabled:
             self._init_client()

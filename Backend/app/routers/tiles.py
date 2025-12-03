@@ -47,9 +47,11 @@ async def get_tile(
         )
 
     # Check if using cloud storage (Cloudflare R2)
+    logger.info(f"Cloud storage enabled: {cloud_storage.enabled}, public_url: {cloud_storage.public_url}")
     if cloud_storage.enabled and cloud_storage.public_url:
         # Redirect to R2 public URL for better performance
         tile_url = cloud_storage.get_tile_url(dataset_id, z, x, y, format)
+        logger.info(f"Redirecting to R2: {tile_url}")
         if tile_url:
             return RedirectResponse(
                 url=tile_url,
