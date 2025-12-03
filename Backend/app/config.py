@@ -70,12 +70,14 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
-    # AWS S3 (Optional)
+    # Cloud Storage (Cloudflare R2 / AWS S3)
     USE_S3: bool = False
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
     AWS_BUCKET_NAME: str = ""
-    AWS_REGION: str = "us-east-1"
+    AWS_REGION: str = "auto"  # Use 'auto' for R2
+    S3_ENDPOINT_URL: str = ""  # R2 endpoint: https://<account_id>.r2.cloudflarestorage.com
+    R2_PUBLIC_URL: str = ""  # Public bucket URL: https://pub-xxxx.r2.dev
 
     class Config:
         # Ensure the .env in the project root (Backend/.env) is loaded

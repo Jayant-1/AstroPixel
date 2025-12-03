@@ -3,7 +3,7 @@ Tile serving endpoints
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Path as PathParam
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from pathlib import Path
 import logging
@@ -11,6 +11,7 @@ import logging
 from app.database import get_db
 from app.models import Dataset
 from app.config import settings
+from app.services.storage import cloud_storage
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -44,6 +45,17 @@ async def get_tile(
         raise HTTPException(
             status_code=503, detail=f"Dataset is {dataset.processing_status}"
         )
+
+    # Check if using cloud storage (Cloudflare R2)
+    if cloud_storage.enabled and cloud_storage.public_url:
+        # Redirect to R2 public URL for better performance
+        tile_url = cloud_storage.get_tile_url(dataset_id, z, x, y, format)
+        if tile_url:
+            return RedirectResponse(
+                url=tile_url,
+                status_code=302,
+                headers={"Cache-Control": "public, max-age=31536000"}
+            )
 
     # Validate zoom level
     if z > dataset.max_zoom:

@@ -82,7 +82,8 @@ const ViewerCanvas = ({ dataset, onReady, mode }) => {
           minLevel: 0,
           maxLevel: maxLevel,
           getTileUrl: function (level, x, y) {
-            return `${API_BASE_URL}/api/tiles/${dataset.id}/${level}/${x}/${y}.png`;
+            // Use jpg format to match generated tiles (backend has fallback for other formats)
+            return `${API_BASE_URL}/api/tiles/${dataset.id}/${level}/${x}/${y}.jpg`;
           },
         },
 

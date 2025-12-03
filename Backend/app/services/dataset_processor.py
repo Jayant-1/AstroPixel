@@ -14,6 +14,7 @@ from app.models import Dataset, ProcessingJob
 from app.schemas import DatasetCreate
 from app.services.tile_generator import TileGenerator
 from app.services.perfect_tile_generator import PerfectTileGenerator
+from app.services.storage import cloud_storage
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -152,6 +153,29 @@ class DatasetProcessor:
                 # Generate preview thumbnail
                 preview_path = settings.DATASETS_DIR / f"{dataset_id}_preview.jpg"
                 tile_gen.generate_preview(preview_path)
+                
+                # Upload to cloud storage if enabled (Cloudflare R2)
+                if cloud_storage.enabled:
+                    logger.info(f"Uploading tiles to cloud storage for dataset {dataset_id}")
+                    try:
+                        tile_path = Path(dataset.tile_base_path)
+                        uploaded = cloud_storage.upload_tiles_directory(tile_path, dataset_id)
+                        logger.info(f"Uploaded {uploaded} tiles to cloud storage")
+                        
+                        # Upload preview
+                        if preview_path.exists():
+                            preview_url = cloud_storage.upload_preview(preview_path, dataset_id)
+                            if preview_url:
+                                dataset.extra_metadata = dataset.extra_metadata or {}
+                                dataset.extra_metadata['preview_url'] = preview_url
+                                logger.info(f"Uploaded preview to: {preview_url}")
+                        
+                        # Optionally clean up local tiles to save space
+                        # shutil.rmtree(tile_path)  # Uncomment to delete local tiles after upload
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to upload to cloud storage: {e}")
+                        # Don't fail the whole process, tiles still exist locally
             else:
                 dataset.processing_status = "failed"
                 dataset.processing_progress = 0
