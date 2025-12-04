@@ -194,11 +194,15 @@ class DatasetProcessor:
                         uploaded = cloud_storage.upload_tiles_directory(tile_path, dataset_id)
                         logger.info(f"Uploaded {uploaded} tiles to cloud storage")
                         
+                        # Mark tiles as uploaded to cloud
+                        dataset.extra_metadata = dataset.extra_metadata or {}
+                        dataset.extra_metadata['tiles_uploaded_to_cloud'] = True
+                        dataset.extra_metadata['tiles_count'] = uploaded
+                        
                         # Upload preview
                         if preview_path.exists():
                             preview_url = cloud_storage.upload_preview(preview_path, dataset_id)
                             if preview_url:
-                                dataset.extra_metadata = dataset.extra_metadata or {}
                                 dataset.extra_metadata['preview_url'] = preview_url
                                 logger.info(f"Uploaded preview to: {preview_url}")
                         

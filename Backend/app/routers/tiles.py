@@ -46,12 +46,21 @@ async def get_tile(
             status_code=503, detail=f"Dataset is {dataset.processing_status}"
         )
 
-    # Check if using cloud storage (Cloudflare R2)
-    logger.info(f"Cloud storage enabled: {cloud_storage.enabled}, public_url: {cloud_storage.public_url}")
+    # Check if tiles were uploaded to cloud storage (R2)
+    # Only redirect if we have evidence tiles exist in R2
+    tiles_in_cloud = False
     if cloud_storage.enabled and cloud_storage.public_url:
+        # Check if dataset has cloud storage metadata indicating successful upload
+        if dataset.extra_metadata and dataset.extra_metadata.get('tiles_uploaded_to_cloud'):
+            tiles_in_cloud = True
+        # Also check if preview_url exists (means R2 upload happened)
+        elif dataset.extra_metadata and dataset.extra_metadata.get('preview_url'):
+            tiles_in_cloud = True
+    
+    if tiles_in_cloud:
         # Redirect to R2 public URL for better performance
         tile_url = cloud_storage.get_tile_url(dataset_id, z, x, y, format)
-        logger.info(f"Redirecting to R2: {tile_url}")
+        logger.debug(f"Redirecting to R2: {tile_url}")
         if tile_url:
             return RedirectResponse(
                 url=tile_url,
