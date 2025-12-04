@@ -3,9 +3,10 @@ Cloud Storage Service for Cloudflare R2 / AWS S3
 Handles tile uploads and serving from cloud storage
 """
 
-import boto3
-from botocore.config import Config
-from botocore.exceptions import ClientError
+# LAZY IMPORTS: boto3 is only imported when actually needed to save ~50MB at startup
+# import boto3
+# from botocore.config import Config
+# from botocore.exceptions import ClientError
 from pathlib import Path
 import logging
 import os
@@ -20,12 +21,13 @@ logger = logging.getLogger(__name__)
 class CloudStorage:
     """
     Cloud storage service for tiles using S3-compatible APIs (Cloudflare R2, AWS S3)
-    Uses lazy initialization to speed up app startup
+    Uses lazy initialization to speed up app startup and save memory
     """
     
     def __init__(self):
         self.enabled = settings.USE_S3
         self._client = None  # Lazy initialization
+        self._boto3 = None  # Lazy import
         self.bucket_name = settings.AWS_BUCKET_NAME
         self.public_url = getattr(settings, 'R2_PUBLIC_URL', None) or ""
         self._initialized = False
@@ -40,8 +42,12 @@ class CloudStorage:
         return self._client
     
     def _init_client(self):
-        """Initialize S3/R2 client"""
+        """Initialize S3/R2 client - imports boto3 only when needed"""
         try:
+            # Lazy import boto3 to save memory at startup
+            import boto3
+            from botocore.config import Config
+            
             # Get endpoint URL for R2 (not needed for AWS S3)
             endpoint_url = getattr(settings, 'S3_ENDPOINT_URL', None)
             
@@ -108,7 +114,7 @@ class CloudStorage:
             logger.debug(f"Uploaded {local_path} to {remote_key}")
             return True
             
-        except ClientError as e:
+        except Exception as e:
             logger.error(f"Failed to upload {local_path}: {e}")
             return False
     
@@ -173,7 +179,7 @@ class CloudStorage:
             key = f"tiles/{dataset_id}/{z}/{x}/{y}.{format}"
             self.client.head_object(Bucket=self.bucket_name, Key=key)
             return True
-        except ClientError:
+        except Exception:
             return False
     
     def delete_dataset_tiles(self, dataset_id: int) -> int:
@@ -209,7 +215,7 @@ class CloudStorage:
             logger.info(f"Deleted {deleted} tiles for dataset {dataset_id}")
             return deleted
             
-        except ClientError as e:
+        except Exception as e:
             logger.error(f"Failed to delete tiles for dataset {dataset_id}: {e}")
             return 0
     

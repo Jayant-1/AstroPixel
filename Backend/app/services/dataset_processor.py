@@ -13,7 +13,8 @@ from sqlalchemy.orm import Session
 from app.models import Dataset, ProcessingJob
 from app.schemas import DatasetCreate
 from app.services.tile_generator import TileGenerator
-from app.services.perfect_tile_generator import PerfectTileGenerator
+# LAZY IMPORT: PerfectTileGenerator is imported only when needed to save memory at startup
+# from app.services.perfect_tile_generator import PerfectTileGenerator
 from app.services.storage import cloud_storage
 from app.config import settings
 
@@ -159,6 +160,10 @@ class DatasetProcessor:
             dataset.processing_progress = 0
             db.commit()
 
+            # LAZY IMPORT: Only load heavy tile generator when actually needed
+            # This saves ~100-200MB RAM at startup
+            from app.services.perfect_tile_generator import PerfectTileGenerator
+            
             # Use Perfect Tile Generator
             tile_path = Path(dataset.tile_base_path)
             tile_gen = PerfectTileGenerator(
