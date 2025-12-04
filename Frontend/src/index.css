@@ -24,7 +24,94 @@
     --input: 216 34% 17%;
     --ring: 224.3 76.3% 48%;
     --radius: 0.5rem;
+
+    /* AstroPixel Space Theme Colors */
+    --astro-nebula-purple: #7c3aed;
+    --astro-nebula-pink: #ec4899;
+    --astro-cosmic-blue: #3b82f6;
+    --astro-starlight: #fbbf24;
+    --astro-void-black: #030712;
+    --astro-deep-space: #0f172a;
+    
+    /* Celestial Accent Colors */
+    --astro-supernova: #f97316;
+    --astro-aurora-green: #22c55e;
+    --astro-plasma-cyan: #06b6d4;
+    --astro-red-giant: #ef4444;
+    --astro-white-dwarf: #f8fafc;
+    
+    /* UI Elements */
+    --astro-panel-glass: rgba(15, 23, 42, 0.85);
+    --astro-border-glow: rgba(124, 58, 237, 0.3);
+    --astro-highlight: #a78bfa;
   }
+}
+
+/* AstroPixel Landing Page Styles */
+@layer components {
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+  }
+
+  .glass-panel-hover:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #f472b6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-button {
+    background: linear-gradient(135deg, #3b82f6 0%, #7c3aed 100%);
+    transition: all 0.3s ease;
+  }
+
+  .gradient-button:hover {
+    background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+    box-shadow: 0 0 30px rgba(124, 58, 237, 0.5);
+    transform: scale(1.05);
+  }
+
+  .nebula-glow {
+    box-shadow: 0 0 60px rgba(124, 58, 237, 0.3);
+  }
+
+  .star-twinkle {
+    animation: twinkle 3s ease-in-out infinite;
+  }
+
+  .float-animation {
+    animation: float 6s ease-in-out infinite;
+  }
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-20px); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(124, 58, 237, 0.3); }
+  50% { box-shadow: 0 0 40px rgba(124, 58, 237, 0.6); }
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 @layer base {
