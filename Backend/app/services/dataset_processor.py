@@ -113,6 +113,9 @@ class DatasetProcessor:
             dataset_id: ID of dataset to process
             file_path: Path to uploaded file
         """
+        import psutil
+        import gc
+        
         # Create new database session for background task
         from app.database import SessionLocal
         db = SessionLocal()
@@ -122,6 +125,35 @@ class DatasetProcessor:
             if not dataset:
                 logger.error(f"Dataset {dataset_id} not found for background processing")
                 return
+
+            # Check available memory BEFORE starting
+            memory = psutil.virtual_memory()
+            available_mb = memory.available / (1024 * 1024)
+            file_size_mb = file_path.stat().st_size / (1024 * 1024)
+            
+            logger.info(f"Memory check: {available_mb:.0f}MB available, file size: {file_size_mb:.0f}MB")
+            
+            # For PSB/PSD files, we need at least 3x file size in RAM
+            # For TIFF files with rasterio streaming, we need less
+            file_ext = str(file_path).lower()
+            is_psb = file_ext.endswith(('.psb', '.psd'))
+            
+            min_required_mb = file_size_mb * 3 if is_psb else 200  # PSB needs more, TIFF can stream
+            
+            if available_mb < min_required_mb:
+                logger.error(f"Insufficient memory for tile generation!")
+                logger.error(f"Available: {available_mb:.0f}MB, Required: {min_required_mb:.0f}MB")
+                logger.error(f"File type: {'PSB/PSD' if is_psb else 'TIFF'}")
+                
+                dataset.processing_status = "failed"
+                dataset.processing_progress = 0
+                dataset.extra_metadata = dataset.extra_metadata or {}
+                dataset.extra_metadata['error'] = f"Insufficient memory. Available: {available_mb:.0f}MB, Required: ~{min_required_mb:.0f}MB. Try a smaller file or upgrade server."
+                db.commit()
+                return
+
+            # Force garbage collection before starting
+            gc.collect()
 
             dataset.processing_status = "processing"
             dataset.processing_progress = 0

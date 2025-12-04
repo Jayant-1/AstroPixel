@@ -110,9 +110,11 @@ export default {
         "spotlight-pulse": "spotlight-pulse 2s ease-in-out infinite",
       },
       backgroundImage: {
-        "space-gradient": "linear-gradient(135deg, #030712 0%, #0f172a 50%, #030712 100%)",
+        "space-gradient":
+          "linear-gradient(135deg, #030712 0%, #0f172a 50%, #030712 100%)",
         "nebula-gradient": "linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)",
-        "cosmic-gradient": "linear-gradient(135deg, #3b82f6 0%, #7c3aed 50%, #ec4899 100%)",
+        "cosmic-gradient":
+          "linear-gradient(135deg, #3b82f6 0%, #7c3aed 50%, #ec4899 100%)",
       },
     },
   },
