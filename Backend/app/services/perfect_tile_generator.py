@@ -75,11 +75,25 @@ if HAS_RASTERIO:
     logging.getLogger("rasterio._err").setLevel(logging.ERROR)
 
 import os
-# Configuration - MAXIMUM CPU UTILIZATION MODE
-# Use all logical CPUs × 16 for maximum parallelism
-MAX_WORKERS = max(1, int((os.cpu_count() or multiprocessing.cpu_count() or 4) * 16))
-MEMORY_THRESHOLD_GB = 0.005  # Extreme streaming mode
-WINDOW_SIZE = 32768  # 32K×32K pixel chunks for max throughput
+
+# Configuration - MAXIMUM CPU/RAM UTILIZATION FOR RENDER
+# Render free tier: 0.5 CPU, 512MB RAM
+# Render paid: up to 4 CPU, 8GB RAM
+CPU_COUNT = os.cpu_count() or multiprocessing.cpu_count() or 4
+
+# Scale workers based on available CPUs - aggressive parallelism
+# For I/O bound work (file reading/writing), we can use more workers than CPUs
+MAX_WORKERS = max(4, CPU_COUNT * 4)  # 4x CPU count for I/O bound tasks
+
+# Memory thresholds - be aggressive with streaming for cloud environments
+MEMORY_THRESHOLD_GB = 0.1  # Use streaming for files > 100MB (safe for limited RAM)
+WINDOW_SIZE = 16384  # 16K×16K pixel chunks - balance between speed and memory
+
+# PNG compression - lower = faster but larger files
+# 1 = fastest, 9 = smallest file
+PNG_COMPRESS_LEVEL = 1  # FAST mode for speed
+
+logger.info(f"🚀 Tile Generator Config: {CPU_COUNT} CPUs, {MAX_WORKERS} workers")
 
 
 class PerfectTileGenerator:
@@ -383,7 +397,7 @@ class PerfectTileGenerator:
                 # Save tile with MAXIMUM quality - no color compromise
                 tile_path = zoom_dir / str(x) / f"{y}.png"
                 # PNG for lossless compression - preserves exact pixel values and color profile
-                tile.save(tile_path, "PNG", compress_level=6, optimize=True)
+                tile.save(tile_path, "PNG", compress_level=PNG_COMPRESS_LEVEL, optimize=False)
                 tile_count += 1
 
         logger.info(f"    ✓ Generated {tile_count} tiles")
@@ -605,7 +619,7 @@ class PerfectTileGenerator:
                     # Save tile with lossless PNG - preserves exact colors
                     tile_path = zoom_dir / str(x) / f"{y}.png"
                     # PNG for lossless compression - preserves exact pixel values and color profile
-                    tile_img.save(tile_path, "PNG", compress_level=6, optimize=True)
+                    tile_img.save(tile_path, "PNG", compress_level=PNG_COMPRESS_LEVEL, optimize=False)
                     tile_count += 1
 
                 except Exception as e:
@@ -616,7 +630,7 @@ class PerfectTileGenerator:
                             "RGB", (self.tile_size, self.tile_size), "black"
                         )
                         black_tile.save(
-                            tile_path, "PNG", compress_level=6, optimize=True
+                            tile_path, "PNG", compress_level=PNG_COMPRESS_LEVEL, optimize=False
                         )
                         tile_count += 1
                         with self.tile_lock:
@@ -678,7 +692,7 @@ class PerfectTileGenerator:
 
                     tile_path = zoom_dir / str(x) / f"{y}.png"
                     # PNG for lossless compression - preserves exact pixel values and color profile
-                    tile_img.save(tile_path, "PNG", compress_level=6, optimize=True)
+                    tile_img.save(tile_path, "PNG", compress_level=PNG_COMPRESS_LEVEL, optimize=False)
                     return True
                 except Exception as e:
                     # Create black tile for corrupted region
@@ -688,7 +702,7 @@ class PerfectTileGenerator:
                             "RGB", (self.tile_size, self.tile_size), "black"
                         )
                         black_tile.save(
-                            tile_path, "PNG", compress_level=6, optimize=True
+                            tile_path, "PNG", compress_level=PNG_COMPRESS_LEVEL, optimize=False
                         )
                         with self.tile_lock:
                             self.corrupted_tiles += 1
@@ -708,10 +722,8 @@ class PerfectTileGenerator:
                 for future in as_completed(futures):
                     if future.result():
                         tile_count += 1
-                    if tile_count % 25 == 0:
-                        logger.debug(f"    🚀 {tile_count} tiles generated with {MAX_WORKERS}/72 workers")
 
-            logger.info(f"    ✓ Generated {tile_count} tiles (HYPERDRIVE: {MAX_WORKERS}/72 workers)")
+            logger.info(f"    ✓ Generated {tile_count} tiles ({MAX_WORKERS} parallel workers)")
             self.tiles_generated += tile_count
         except Exception as e:
             logger.error(f"❌ Parallel generation failed: {e}", exc_info=True)
@@ -732,9 +744,8 @@ class PerfectTileGenerator:
         scale = 2 ** (zoom - max_zoom)
         zoom_dir = self.output_dir / str(zoom)
 
-        # HYPERDRIVE: Process in larger batches for maximum throughput
-        BATCH_SIZE = 512  # Process 512 rows at a time (MAXIMUM CPU)
-        CHUNK_SIZE = 100  # Process tiles in chunks of 100 within each batch
+        # Optimized batch processing - scale with available workers
+        BATCH_SIZE = max(64, MAX_WORKERS * 4)  # Process more rows per batch
         total_rows = tiles_y
 
         def generate_tile(x, y):
@@ -768,7 +779,7 @@ class PerfectTileGenerator:
                     )
 
                 tile_path = zoom_dir / str(x) / f"{y}.png"
-                tile_img.save(tile_path, "PNG", compress_level=6, optimize=True)
+                tile_img.save(tile_path, "PNG", compress_level=PNG_COMPRESS_LEVEL, optimize=False)
                 return True
             except Exception:
                 try:
@@ -776,7 +787,7 @@ class PerfectTileGenerator:
                     black_tile = Image.new(
                         "RGB", (self.tile_size, self.tile_size), "black"
                     )
-                    black_tile.save(tile_path, "PNG", compress_level=6, optimize=True)
+                    black_tile.save(tile_path, "PNG", compress_level=PNG_COMPRESS_LEVEL, optimize=False)
                     with self.tile_lock:
                         self.corrupted_tiles += 1
                     return True
@@ -910,7 +921,7 @@ class PerfectTileGenerator:
                     # Save tile with lossless PNG - preserves exact colors
                     tile_path = zoom_dir / str(x) / f"{y}.png"
                     # PNG for lossless compression - preserves exact pixel values and color profile
-                    downsampled.save(tile_path, "PNG", compress_level=6, optimize=True)
+                    downsampled.save(tile_path, "PNG", compress_level=PNG_COMPRESS_LEVEL, optimize=False)
 
                     combined.close()
                     downsampled.close()
@@ -1074,7 +1085,7 @@ class PerfectTileGenerator:
 
                         # Save with lossless PNG - preserves exact colors
                         tile_path = zoom_dir / str(x) / f"{y}.png"
-                        tile.save(tile_path, "PNG", compress_level=6, optimize=True)
+                        tile.save(tile_path, "PNG", compress_level=PNG_COMPRESS_LEVEL, optimize=False)
                         tile.close()
 
                         self.tiles_generated += 1
@@ -1087,7 +1098,7 @@ class PerfectTileGenerator:
                             "RGB", (self.tile_size, self.tile_size), "black"
                         )
                         black_tile.save(
-                            tile_path, "PNG", compress_level=6, optimize=True
+                            tile_path, "PNG", compress_level=PNG_COMPRESS_LEVEL, optimize=False
                         )
                         black_tile.close()
                         self.tiles_generated += 1
@@ -1194,7 +1205,7 @@ class PerfectTileGenerator:
                     tile = padded
 
                 tile_path = zoom_dir / str(x) / f"{y}.png"
-                tile.save(tile_path, "PNG", compress_level=6, optimize=True)
+                tile.save(tile_path, "PNG", compress_level=PNG_COMPRESS_LEVEL, optimize=False)
                 tile.close()
 
                 self.tiles_generated += 1
