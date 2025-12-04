@@ -10,8 +10,9 @@ from fastapi import (
     Query,
     HTTPException,
     BackgroundTasks,
+    Form,
 )
-from fastapi.responses import RedirectResponse, FileResponse
+from fastapi.responses import RedirectResponse, FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pathlib import Path
@@ -19,6 +20,8 @@ import logging
 import shutil
 import re
 import aiofiles
+import uuid
+import os
 
 from app.database import get_db
 from app.models import Dataset
@@ -37,6 +40,9 @@ from app.config import settings
 
 # Optimized chunk size for fast uploads (8MB chunks)
 UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
+
+# Store for tracking chunked uploads
+chunked_uploads = {}
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -87,7 +93,174 @@ async def get_dataset_preview(dataset_id: int, db: Session = Depends(get_db)):
     )
 
 
-@router.post("/datasets/upload", response_model=DatasetResponse, status_code=201)
+# ============================================================================
+# CHUNKED UPLOAD ENDPOINTS - For large files (10GB+)
+# ============================================================================
+
+@router.post("/datasets/upload/init")
+async def init_chunked_upload(
+    filename: str = Query(..., description="Original filename"),
+    filesize: int = Query(..., description="Total file size in bytes"),
+    total_chunks: int = Query(..., description="Total number of chunks"),
+):
+    """
+    Initialize a chunked upload session for large files.
+    Returns an upload_id to use for subsequent chunk uploads.
+    """
+    # Validate file type
+    valid_extensions = (".tif", ".tiff", ".TIF", ".TIFF", ".psb", ".PSB", ".psd", ".PSD")
+    if not filename.endswith(valid_extensions):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file format. Supported: .tif, .tiff, .psb, .psd"
+        )
+    
+    # Generate unique upload ID
+    upload_id = str(uuid.uuid4())
+    
+    # Create temp directory for chunks
+    temp_dir = settings.TEMP_DIR / upload_id
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Store upload session info
+    chunked_uploads[upload_id] = {
+        "filename": filename,
+        "filesize": filesize,
+        "total_chunks": total_chunks,
+        "received_chunks": set(),
+        "temp_dir": temp_dir,
+    }
+    
+    logger.info(f"Initialized chunked upload: {upload_id} for {filename} ({filesize / (1024**3):.2f} GB, {total_chunks} chunks)")
+    
+    return {
+        "upload_id": upload_id,
+        "chunk_size": UPLOAD_CHUNK_SIZE,
+        "message": "Upload initialized. Send chunks to /api/datasets/upload/chunk"
+    }
+
+
+@router.post("/datasets/upload/chunk")
+async def upload_chunk(
+    upload_id: str = Form(...),
+    chunk_index: int = Form(...),
+    chunk: UploadFile = File(...),
+):
+    """
+    Upload a single chunk of a large file.
+    """
+    if upload_id not in chunked_uploads:
+        raise HTTPException(status_code=404, detail="Upload session not found. Initialize first.")
+    
+    session = chunked_uploads[upload_id]
+    
+    # Save chunk to temp directory
+    chunk_path = session["temp_dir"] / f"chunk_{chunk_index:06d}"
+    
+    try:
+        async with aiofiles.open(chunk_path, "wb") as f:
+            content = await chunk.read()
+            await f.write(content)
+        
+        session["received_chunks"].add(chunk_index)
+        received = len(session["received_chunks"])
+        total = session["total_chunks"]
+        
+        logger.debug(f"Chunk {chunk_index} received for {upload_id} ({received}/{total})")
+        
+        return {
+            "chunk_index": chunk_index,
+            "received": received,
+            "total": total,
+            "complete": received == total
+        }
+    except Exception as e:
+        logger.error(f"Error saving chunk {chunk_index}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save chunk: {str(e)}")
+
+
+@router.post("/datasets/upload/complete", response_model=DatasetResponse)
+async def complete_chunked_upload(
+    background_tasks: BackgroundTasks,
+    upload_id: str = Query(...),
+    name: str = Query(..., description="Dataset name"),
+    description: Optional[str] = Query(None),
+    category: str = Query(..., pattern="^(earth|mars|space)$"),
+    db: Session = Depends(get_db),
+):
+    """
+    Complete a chunked upload by assembling chunks and processing the dataset.
+    """
+    if upload_id not in chunked_uploads:
+        raise HTTPException(status_code=404, detail="Upload session not found")
+    
+    session = chunked_uploads[upload_id]
+    
+    # Verify all chunks received
+    if len(session["received_chunks"]) != session["total_chunks"]:
+        missing = session["total_chunks"] - len(session["received_chunks"])
+        raise HTTPException(
+            status_code=400,
+            detail=f"Upload incomplete. Missing {missing} chunks."
+        )
+    
+    # Assemble chunks into final file
+    final_path = settings.UPLOAD_DIR / session["filename"]
+    
+    try:
+        logger.info(f"Assembling {session['total_chunks']} chunks into {final_path}")
+        
+        async with aiofiles.open(final_path, "wb") as outfile:
+            for i in range(session["total_chunks"]):
+                chunk_path = session["temp_dir"] / f"chunk_{i:06d}"
+                async with aiofiles.open(chunk_path, "rb") as chunk_file:
+                    content = await chunk_file.read()
+                    await outfile.write(content)
+        
+        logger.info(f"File assembled: {final_path} ({final_path.stat().st_size / (1024**3):.2f} GB)")
+        
+        # Clean up temp chunks
+        shutil.rmtree(session["temp_dir"], ignore_errors=True)
+        del chunked_uploads[upload_id]
+        
+        # Create dataset (same as regular upload)
+        dataset_info = DatasetCreate(name=name, description=description, category=category)
+        dataset = await DatasetProcessor.create_dataset_entry(final_path, dataset_info, db)
+        
+        background_tasks.add_task(
+            DatasetProcessor.process_tiles_background,
+            dataset.id,
+            final_path
+        )
+        
+        logger.info(f"Dataset {dataset.id} created from chunked upload")
+        return dataset
+        
+    except Exception as e:
+        logger.error(f"Error completing chunked upload: {e}")
+        # Clean up on error
+        if upload_id in chunked_uploads:
+            shutil.rmtree(session["temp_dir"], ignore_errors=True)
+            del chunked_uploads[upload_id]
+        raise HTTPException(status_code=500, detail=f"Failed to complete upload: {str(e)}")
+
+
+@router.delete("/datasets/upload/{upload_id}")
+async def cancel_chunked_upload(upload_id: str):
+    """Cancel and clean up a chunked upload session."""
+    if upload_id not in chunked_uploads:
+        raise HTTPException(status_code=404, detail="Upload session not found")
+    
+    session = chunked_uploads[upload_id]
+    shutil.rmtree(session["temp_dir"], ignore_errors=True)
+    del chunked_uploads[upload_id]
+    
+    return {"message": "Upload cancelled and cleaned up"}
+
+
+# ============================================================================
+# REGULAR UPLOAD ENDPOINT
+# ============================================================================@router.post("/datasets/upload", response_model=DatasetResponse, status_code=201)
 async def upload_dataset(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
