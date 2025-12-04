@@ -29,24 +29,35 @@ const ViewerCanvas = ({ dataset, onReady, mode }) => {
     zoomPerScroll: 1.2,
   });
 
+  // Track last showGrid value to detect changes
+  const lastShowGridRef = useRef(viewerSettings.showGrid);
+
   // Update the onReady ref when it changes
   useEffect(() => {
     onReadyRef.current = onReady;
   }, [onReady]);
 
   useEffect(() => {
-    // Prevent re-initialization if already initialized for this dataset
+    // Check if showGrid changed - force re-initialization
+    const showGridChanged = lastShowGridRef.current !== viewerSettings.showGrid;
+
+    // Prevent re-initialization if already initialized for this dataset AND showGrid hasn't changed
     if (
       !containerRef.current ||
       !dataset ||
-      initializedDatasetIdRef.current === dataset.id
+      (initializedDatasetIdRef.current === dataset.id && !showGridChanged)
     ) {
-      return; // Don't re-initialize for same dataset
+      return; // Don't re-initialize for same dataset unless showGrid changed
     }
+
+    // Update showGrid tracking
+    lastShowGridRef.current = viewerSettings.showGrid;
 
     console.log(
       "🔄 Initializing viewer for dataset:",
-      dataset.id
+      dataset.id,
+      "showGrid:",
+      viewerSettings.showGrid
     );
 
     // Calculate max zoom level based on image dimensions
@@ -221,12 +232,17 @@ const ViewerCanvas = ({ dataset, onReady, mode }) => {
 
     // Cleanup
     return () => {
+      console.log("🧹 Cleaning up viewer instance");
       if (svg && svg.parentNode) {
         svg.parentNode.removeChild(svg);
       }
       if (viewerInstance) {
         viewerInstance.destroy();
       }
+      // Reset refs so re-initialization can happen
+      viewerRef.current = null;
+      setViewer(null);
+      // Note: Don't reset initializedDatasetIdRef here - it's handled by the showGrid check
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataset?.id, viewerSettings.showGrid]); // Re-initialize only when dataset or showGrid changes

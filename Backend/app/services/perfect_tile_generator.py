@@ -76,22 +76,19 @@ if HAS_RASTERIO:
 
 import os
 
-# Configuration - MAXIMUM CPU/RAM UTILIZATION FOR RENDER
-# Render free tier: 0.5 CPU, 512MB RAM
-# Render paid: up to 4 CPU, 8GB RAM
-CPU_COUNT = os.cpu_count() or multiprocessing.cpu_count() or 4
+# Configuration - OPTIMIZED FOR RENDER FREE TIER (512MB RAM)
+CPU_COUNT = os.cpu_count() or 1
 
-# Scale workers based on available CPUs - aggressive parallelism
-# For I/O bound work (file reading/writing), we can use more workers than CPUs
-MAX_WORKERS = max(4, CPU_COUNT * 4)  # 4x CPU count for I/O bound tasks
+# Conservative workers to avoid memory exhaustion
+# Render free tier has very limited RAM, so keep workers low
+MAX_WORKERS = min(2, CPU_COUNT)  # Max 2 workers to save memory
 
-# Memory thresholds - be aggressive with streaming for cloud environments
-MEMORY_THRESHOLD_GB = 0.1  # Use streaming for files > 100MB (safe for limited RAM)
-WINDOW_SIZE = 16384  # 16K×16K pixel chunks - balance between speed and memory
+# Memory thresholds - ALWAYS use streaming on cloud to save RAM
+MEMORY_THRESHOLD_GB = 0.001  # 1MB - force streaming for ALL files
+WINDOW_SIZE = 2048  # 2K×2K pixel chunks - small chunks to save memory
 
-# PNG compression - lower = faster but larger files
-# 1 = fastest, 9 = smallest file
-PNG_COMPRESS_LEVEL = 1  # FAST mode for speed
+# PNG compression - use moderate compression
+PNG_COMPRESS_LEVEL = 3  # Balance between speed and size
 
 
 class PerfectTileGenerator:
@@ -536,10 +533,20 @@ class PerfectTileGenerator:
         for x in range(tiles_x):
             (zoom_dir / str(x)).mkdir(exist_ok=True)
 
-        # Smart threading decision based on tile count
+        # Memory-conservative processing - AVOID PARALLEL on low memory systems
+        # Parallel processing holds multiple tiles in memory simultaneously
         try:
-            if total_tiles > 5000:
-                # Large tile count - use batched parallel processing
+            memory = psutil.virtual_memory()
+            available_gb = memory.available / (1024**3)
+            
+            # On low memory systems (< 1GB available), always use sequential
+            if available_gb < 1.0:
+                logger.info(f"  💾 Low memory ({available_gb:.2f}GB available) - using sequential processing...")
+                self._generate_tiles_sequential(
+                    src, zoom, max_zoom, orig_width, orig_height, tiles_x, tiles_y
+                )
+            elif total_tiles > 10000:
+                # Very large tile count - use batched processing with GC
                 logger.info(
                     f"  🚨 Large tile set detected, using batched processing..."
                 )
@@ -553,15 +560,9 @@ class PerfectTileGenerator:
                     tiles_y,
                     total_tiles,
                 )
-            elif total_tiles > 500:
-                # Medium tile count - use parallel processing
-                logger.info(f"  🔄 Using parallel processing...")
-                self._generate_tiles_parallel(
-                    src, zoom, max_zoom, orig_width, orig_height, tiles_x, tiles_y
-                )
             else:
-                # Small tile count - sequential is fine
-                logger.info(f"  🐌 Using sequential processing...")
+                # Default to sequential for memory safety
+                logger.info(f"  🐌 Using sequential processing (memory-safe)...")
                 self._generate_tiles_sequential(
                     src, zoom, max_zoom, orig_width, orig_height, tiles_x, tiles_y
                 )
@@ -574,7 +575,7 @@ class PerfectTileGenerator:
     def _generate_tiles_sequential(
         self, src, zoom, max_zoom, orig_width, orig_height, tiles_x, tiles_y
     ):
-        """Generate tiles sequentially"""
+        """Generate tiles sequentially - memory efficient"""
         scale = 2 ** (zoom - max_zoom)
         zoom_dir = self.output_dir / str(zoom)
         tile_count = 0
@@ -619,6 +620,11 @@ class PerfectTileGenerator:
                     # PNG for lossless compression - preserves exact pixel values and color profile
                     tile_img.save(tile_path, "PNG", compress_level=PNG_COMPRESS_LEVEL, optimize=False)
                     tile_count += 1
+                    
+                    # Clean up tile image immediately to save memory
+                    del tile_img
+                    del data
+                    del arr
 
                 except Exception as e:
                     # Create black tile for corrupted region
@@ -646,6 +652,9 @@ class PerfectTileGenerator:
                         logger.error(
                             f"Failed to create replacement tile {zoom}/{x}/{y}: {save_error}"
                         )
+            
+            # Garbage collect after each column to prevent memory buildup
+            gc.collect()
 
         logger.info(f"    ✓ Generated {tile_count} tiles")
         self.tiles_generated += tile_count
@@ -742,8 +751,8 @@ class PerfectTileGenerator:
         scale = 2 ** (zoom - max_zoom)
         zoom_dir = self.output_dir / str(zoom)
 
-        # Optimized batch processing - scale with available workers
-        BATCH_SIZE = max(64, MAX_WORKERS * 4)  # Process more rows per batch
+        # Small batch size to minimize memory usage on constrained environments
+        BATCH_SIZE = 8  # Process just 8 rows at a time to save memory
         total_rows = tiles_y
 
         def generate_tile(x, y):
@@ -923,11 +932,16 @@ class PerfectTileGenerator:
 
                     combined.close()
                     downsampled.close()
+                    del combined
+                    del downsampled
                     tile_count += 1
 
                 except Exception as e:
                     logger.warning(f"Error generating tile {target_zoom}/{x}/{y}: {e}")
                     empty_tiles += 1
+            
+            # Garbage collect after each column to prevent memory buildup
+            gc.collect()
 
         if empty_tiles > 0:
             logger.info(f"    ⚠️ {empty_tiles} empty tiles created (no source data)")
@@ -1003,76 +1017,60 @@ class PerfectTileGenerator:
         orig_width: int,
         orig_height: int,
     ):
-        """Generate tiles for max zoom level by processing in memory-efficient strips"""
+        """Generate tiles for max zoom level from PSB - memory-optimized for 512MB limit"""
         tiles_x = math.ceil(orig_width / self.tile_size)
         tiles_y = math.ceil(orig_height / self.tile_size)
 
         logger.info(f"  📦 {orig_width}x{orig_height} → {tiles_x * tiles_y} tiles")
-        logger.info(f"  🎨 Processing in strips to avoid memory issues...")
 
         zoom_dir = self.output_dir / str(zoom)
+        
+        # Ensure all x directories exist first
+        for x in range(tiles_x):
+            x_dir = zoom_dir / str(x)
+            x_dir.mkdir(parents=True, exist_ok=True)
 
-        # Process in horizontal strips (4 tiles high = 1024 pixels)
-        # This keeps memory usage manageable even for huge PSB files
-        strip_height_tiles = 4
-        strip_height_px = strip_height_tiles * self.tile_size
+        # Load full image ONCE for PSB files (psd-tools limitation)
+        # This is unavoidable as psd-tools doesn't support region-based loading
+        logger.info(f"  🎨 Loading PSB image (this may take time for large files)...")
+        
+        try:
+            full_img = psd.topil(layer_filter=lambda layer: True)
+            if full_img is None:
+                logger.error("  ❌ Failed to load PSB image - null result")
+                raise RuntimeError("PSB composite returned null")
+            
+            if full_img.mode != "RGB":
+                logger.info(f"  🔄 Converting from {full_img.mode} to RGB...")
+                full_img = full_img.convert("RGB")
+            
+            logger.info(f"  ✅ Image loaded: {full_img.size}")
+        except MemoryError as e:
+            logger.error(f"  ❌ Out of memory loading PSB: {e}")
+            logger.info("  💡 This PSB file is too large for available RAM")
+            logger.info("  💡 Consider converting to TIFF format first or using a larger instance")
+            raise
+        except Exception as e:
+            logger.error(f"  ❌ Failed to load PSB: {e}")
+            raise
 
-        for strip_start_y in range(0, tiles_y, strip_height_tiles):
-            strip_end_y = min(strip_start_y + strip_height_tiles, tiles_y)
-            strip_top = strip_start_y * self.tile_size
-            strip_bottom = min(strip_end_y * self.tile_size, orig_height)
-
-            logger.info(
-                f"  🔄 Processing strip {strip_start_y//strip_height_tiles + 1}/{math.ceil(tiles_y/strip_height_tiles)} (y={strip_start_y}-{strip_end_y})..."
-            )
-
-            # Composite just this strip
-            # Note: For very large PSB files (25GB+), psd.topil() may still load significant memory
-            # but processing in strips helps manage memory better than loading the entire image
-            try:
-                # Composite the full image (psd-tools limitation), then crop to strip
-                # This is still more memory-efficient than processing the entire image at once
-                full_img = psd.topil(layer_filter=lambda layer: True)
-                if full_img:
-                    # Crop to strip region to reduce memory footprint
-                    strip_img = full_img.crop((0, strip_top, orig_width, strip_bottom))
-                    # Free the full image immediately
-                    del full_img
-                    gc.collect()
-                    if strip_img.mode != "RGB":
-                        strip_img = strip_img.convert("RGB")
-                else:
-                    # Fallback: create blank strip
-                    strip_img = Image.new(
-                        "RGB", (orig_width, strip_bottom - strip_top), "black"
-                    )
-            except MemoryError as e:
-                logger.error(f"  ❌ Out of memory processing strip: {e}")
-                logger.info("  💡 For very large PSB files (>25GB), ensure sufficient RAM available")
-                raise
-            except Exception as e:
-                logger.warning(f"  ⚠️ Strip composite failed: {e}, using blank")
-                strip_img = Image.new(
-                    "RGB", (orig_width, strip_bottom - strip_top), "black"
-                )
-
-            # Generate tiles from this strip
+        # Process tiles one at a time to minimize memory usage
+        logger.info(f"  🔄 Generating tiles sequentially to save memory...")
+        
+        try:
             for x in range(tiles_x):
-                x_dir = zoom_dir / str(x)
-                x_dir.mkdir(parents=True, exist_ok=True)
-
-                for y in range(strip_start_y, strip_end_y):
+                for y in range(tiles_y):
                     try:
-                        # Calculate tile bounds relative to strip
+                        # Calculate tile bounds
                         left = x * self.tile_size
-                        top = (y - strip_start_y) * self.tile_size
+                        top = y * self.tile_size
                         right = min(left + self.tile_size, orig_width)
-                        bottom = min(top + self.tile_size, strip_bottom - strip_top)
+                        bottom = min(top + self.tile_size, orig_height)
 
-                        # Crop tile from strip
-                        tile = strip_img.crop((left, top, right, bottom))
+                        # Crop tile from full image
+                        tile = full_img.crop((left, top, right, bottom))
 
-                        # Pad if needed
+                        # Pad if needed (edge tiles)
                         if tile.size != (self.tile_size, self.tile_size):
                             padded = Image.new(
                                 "RGB", (self.tile_size, self.tile_size), "black"
@@ -1081,10 +1079,11 @@ class PerfectTileGenerator:
                             tile.close()
                             tile = padded
 
-                        # Save with lossless PNG - preserves exact colors
+                        # Save with lossless PNG
                         tile_path = zoom_dir / str(x) / f"{y}.png"
                         tile.save(tile_path, "PNG", compress_level=PNG_COMPRESS_LEVEL, optimize=False)
                         tile.close()
+                        del tile
 
                         self.tiles_generated += 1
 
@@ -1104,9 +1103,14 @@ class PerfectTileGenerator:
                 # Log progress every 10 columns
                 if (x + 1) % 10 == 0:
                     logger.info(f"    ⏳ {x + 1}/{tiles_x} columns")
-
-            # Cleanup strip before next strip
-            strip_img.close()
+                
+                # Garbage collect after each column
+                gc.collect()
+        finally:
+            # Clean up full image after all tiles generated
+            full_img.close()
+            del full_img
+            gc.collect()
 
         logger.info(f"    ✓ Generated {tiles_x * tiles_y} tiles")
 
