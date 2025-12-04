@@ -11,11 +11,13 @@ from fastapi import (
     HTTPException,
     BackgroundTasks,
 )
+from fastapi.responses import RedirectResponse, FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pathlib import Path
 import logging
 import shutil
+import re
 
 from app.database import get_db
 from app.models import Dataset
@@ -28,11 +30,57 @@ from app.schemas import (
     ProcessingStatus,
     DatasetStats,
 )
+from app.services.storage import cloud_storage
 from app.services.dataset_processor import DatasetProcessor
 from app.config import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+# This route handles /datasets/{id}_preview.jpg requests
+# Must be defined in main.py BEFORE the static mount to work
+preview_router = APIRouter()
+
+
+@preview_router.get("/datasets/{dataset_id}_preview.jpg")
+async def get_dataset_preview(dataset_id: int, db: Session = Depends(get_db)):
+    """
+    Get preview thumbnail for a dataset - redirects to R2 if cloud storage enabled
+    """
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    # Check if preview is stored in cloud storage (R2)
+    if cloud_storage.enabled and cloud_storage.public_url:
+        # Check if dataset has preview_url in metadata
+        if dataset.extra_metadata and dataset.extra_metadata.get('preview_url'):
+            return RedirectResponse(
+                url=dataset.extra_metadata['preview_url'],
+                status_code=302,
+                headers={"Cache-Control": "public, max-age=86400"}
+            )
+        # Fallback to constructing R2 URL
+        preview_url = f"{cloud_storage.public_url}/previews/{dataset_id}_preview.jpg"
+        return RedirectResponse(
+            url=preview_url,
+            status_code=302,
+            headers={"Cache-Control": "public, max-age=86400"}
+        )
+
+    # Fallback to local file
+    preview_path = settings.DATASETS_DIR / f"{dataset_id}_preview.jpg"
+
+    if not preview_path.exists():
+        raise HTTPException(status_code=404, detail="Preview not available")
+
+    return FileResponse(
+        preview_path,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @router.post("/datasets/upload", response_model=DatasetResponse, status_code=201)

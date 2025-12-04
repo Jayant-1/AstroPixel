@@ -136,6 +136,24 @@ async def get_preview(dataset_id: int, db: Session = Depends(get_db)):
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
+    # Check if preview is stored in cloud storage (R2)
+    if cloud_storage.enabled and cloud_storage.public_url:
+        # Check if dataset has preview_url in metadata
+        if dataset.extra_metadata and dataset.extra_metadata.get('preview_url'):
+            return RedirectResponse(
+                url=dataset.extra_metadata['preview_url'],
+                status_code=302,
+                headers={"Cache-Control": "public, max-age=86400"}
+            )
+        # Fallback to constructing R2 URL
+        preview_url = f"{cloud_storage.public_url}/previews/{dataset_id}_preview.jpg"
+        return RedirectResponse(
+            url=preview_url,
+            status_code=302,
+            headers={"Cache-Control": "public, max-age=86400"}
+        )
+
+    # Fallback to local file
     preview_path = settings.DATASETS_DIR / f"{dataset_id}_preview.jpg"
 
     if not preview_path.exists():

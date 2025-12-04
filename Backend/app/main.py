@@ -19,6 +19,7 @@ from app.routers import (
     health,
     annotations_simple,
 )
+from app.routers.datasets import preview_router
 
 # Configure Starlette to accept large uploads
 import starlette.datastructures
@@ -94,6 +95,9 @@ try:
     logger.info(f"Mounted tiles directory: {settings.TILES_DIR}")
 except Exception as e:
     logger.warning(f"Could not mount tiles directory: {e}")
+
+# Include preview router BEFORE static mount so it can intercept preview requests
+app.include_router(preview_router, tags=["Previews"])
 
 # Mount static files for dataset previews
 try:
