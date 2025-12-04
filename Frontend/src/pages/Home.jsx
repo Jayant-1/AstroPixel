@@ -13,11 +13,10 @@ import {
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import FileUploader from "../components/common/FileUploader";
-import { API_BASE_URL } from "../services/api";
 import Input from "../components/ui/Input";
 import ProcessingStatusBadge from "../components/ui/ProcessingStatusBadge";
 import { useApp } from "../context/AppContext";
-import api from "../services/api";
+import api, { API_BASE_URL } from "../services/api";
 import { cn, formatNumber, getCategoryColor } from "../utils/helpers";
 
 const Home = () => {
