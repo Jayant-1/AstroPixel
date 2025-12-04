@@ -161,16 +161,26 @@ class DatasetProcessor:
             db.commit()
 
             # LAZY IMPORT: Only load heavy tile generator when actually needed
-            # This saves ~100-200MB RAM at startup
-            from app.services.perfect_tile_generator import PerfectTileGenerator
-            
-            # Use Perfect Tile Generator
-            tile_path = Path(dataset.tile_base_path)
-            tile_gen = PerfectTileGenerator(
-                input_file=file_path,
-                output_dir=tile_path,
-                tile_size=settings.TILE_SIZE,
-            )
+            # On minimal installs (512MB RAM), this may fail - that's OK
+            try:
+                from app.services.perfect_tile_generator import PerfectTileGenerator
+                
+                # Use Perfect Tile Generator
+                tile_path = Path(dataset.tile_base_path)
+                tile_gen = PerfectTileGenerator(
+                    input_file=file_path,
+                    output_dir=tile_path,
+                    tile_size=settings.TILE_SIZE,
+                )
+            except ImportError as e:
+                logger.error(f"Tile generation not available: {e}")
+                logger.error("This server is configured for tile serving only, not generation.")
+                logger.error("Pre-generate tiles locally and upload to R2.")
+                dataset.processing_status = "failed"
+                dataset.extra_metadata = dataset.extra_metadata or {}
+                dataset.extra_metadata['error'] = "Tile generation not available on this server. Pre-generate tiles locally and upload to R2."
+                db.commit()
+                return
 
             logger.info(f"Starting background tile generation for dataset {dataset_id}")
 

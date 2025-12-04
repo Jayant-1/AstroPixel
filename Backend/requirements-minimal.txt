@@ -1,6 +1,6 @@
 # MINIMAL requirements for 512MB Render free tier
-# Heavy processing libraries removed to fit in memory
-# Tile generation disabled - pre-upload tiles to R2 instead
+# This version ONLY serves pre-generated tiles from R2
+# NO tile generation capability - tiles must be pre-uploaded to R2
 
 # FastAPI Core
 fastapi==0.109.0
@@ -13,13 +13,9 @@ pydantic-settings==2.1.0
 sqlalchemy==2.0.25
 psycopg2-binary==2.9.9
 
-# Image Processing (minimal - for metadata extraction only)
-Pillow==10.2.0
-
 # Utilities
 python-dotenv==1.0.0
 aiofiles==23.2.1
-psutil==5.9.8
 
 # Cloud Storage (Cloudflare R2)
 boto3==1.34.0

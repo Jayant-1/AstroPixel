@@ -18,20 +18,27 @@ except Exception:  # pragma: no cover - environment may not have GDAL
     gdal = None
     osr = None
     HAVE_GDAL = False
-from PIL import Image, PsdImagePlugin
+
+try:
+    from PIL import Image, PsdImagePlugin
+    HAVE_PIL = True
+    # Explicitly register PSD/PSB format support
+    Image.register_open(
+        PsdImagePlugin.PsdImageFile.format,
+        PsdImagePlugin.PsdImageFile,
+        PsdImagePlugin._accept,
+    )
+    Image.register_extension(PsdImagePlugin.PsdImageFile.format, ".psd")
+    Image.register_extension(PsdImagePlugin.PsdImageFile.format, ".psb")
+except ImportError:
+    HAVE_PIL = False
+    Image = None
+    
 import os
 
 from app.config import settings
-from app.services.simple_tile_generator import SimpleTileGenerator
-
-# Explicitly register PSD/PSB format support
-Image.register_open(
-    PsdImagePlugin.PsdImageFile.format,
-    PsdImagePlugin.PsdImageFile,
-    PsdImagePlugin._accept,
-)
-Image.register_extension(PsdImagePlugin.PsdImageFile.format, ".psd")
-Image.register_extension(PsdImagePlugin.PsdImageFile.format, ".psb")
+# Lazy import - SimpleTileGenerator uses numpy which may not be installed
+# from app.services.simple_tile_generator import SimpleTileGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -294,6 +301,8 @@ class TileGenerator:
             logger.info(
                 f"GDAL not available or failed -> using PIL SimpleTileGenerator for {self.input_file.name}"
             )
+            # Lazy import SimpleTileGenerator
+            from app.services.simple_tile_generator import SimpleTileGenerator
             pil_gen = SimpleTileGenerator(
                 self.input_file, self.output_dir, tile_size=self.tile_size
             )
@@ -392,6 +401,8 @@ class TileGenerator:
             logger.info(
                 f"Generating preview with PIL fallback for {self.input_file.name}"
             )
+            # Lazy import SimpleTileGenerator
+            from app.services.simple_tile_generator import SimpleTileGenerator
             pil_gen = SimpleTileGenerator(
                 self.input_file, self.output_dir, tile_size=self.tile_size
             )
