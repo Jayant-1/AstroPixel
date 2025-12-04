@@ -98,15 +98,9 @@ const api = {
       params.append("description", description);
     }
 
-    // Calculate timeout based on file size:
-    // 50MB per second baseline, add buffer
-    const fileSizeMB = file.size / (1024 * 1024);
-    const estimatedSeconds = (fileSizeMB / 50) * 1.5;
-    // Minimum 10 minutes for uploads, cap at 60 minutes
-    const timeout = Math.min(
-      Math.max(600000, estimatedSeconds * 1000),
-      3600000
-    );
+    // Very long timeout for large file uploads
+    // No practical limit - let it run as long as needed
+    const timeout = 0; // 0 = no timeout in axios
 
     const response = await apiClient.post(
       `/api/datasets/upload?${params.toString()}`,
@@ -115,7 +109,7 @@ const api = {
         headers: {
           "Content-Type": "multipart/form-data",
         },
-        timeout: timeout, // Dynamic timeout based on file size
+        timeout: timeout, // No timeout for uploads
         onUploadProgress: onUploadProgress,
       }
     );

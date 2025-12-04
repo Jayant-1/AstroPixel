@@ -18,6 +18,7 @@ from pathlib import Path
 import logging
 import shutil
 import re
+import aiofiles
 
 from app.database import get_db
 from app.models import Dataset
@@ -33,6 +34,9 @@ from app.schemas import (
 from app.services.storage import cloud_storage
 from app.services.dataset_processor import DatasetProcessor
 from app.config import settings
+
+# Optimized chunk size for fast uploads (8MB chunks)
+UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -119,11 +123,13 @@ async def upload_dataset(
             detail=f"File too large. Maximum size: {max_gb:.1f}GB (you uploaded {size_gb:.1f}GB)",
         )
 
-    # Save uploaded file
+    # Save uploaded file with optimized async streaming
     file_path = settings.UPLOAD_DIR / file.filename
     try:
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        # Use async file writing with large chunks for speed
+        async with aiofiles.open(file_path, "wb") as buffer:
+            while chunk := await file.read(UPLOAD_CHUNK_SIZE):
+                await buffer.write(chunk)
         logger.info(f"Saved uploaded file: {file_path}")
     except Exception as e:
         logger.error(f"Error saving uploaded file: {e}")

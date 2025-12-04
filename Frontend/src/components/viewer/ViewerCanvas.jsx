@@ -41,20 +41,12 @@ const ViewerCanvas = ({ dataset, onReady, mode }) => {
       !dataset ||
       initializedDatasetIdRef.current === dataset.id
     ) {
-      // Special case: if showGrid changed, allow re-initialization
-      if (initializedDatasetIdRef.current === dataset.id) {
-        console.log("🔄 Re-initializing viewer due to showGrid change");
-        initializedDatasetIdRef.current = null; // Clear to allow re-init
-      } else {
-        return;
-      }
+      return; // Don't re-initialize for same dataset
     }
 
     console.log(
       "🔄 Initializing viewer for dataset:",
-      dataset.id,
-      "with showGrid:",
-      viewerSettings.showGrid
+      dataset.id
     );
 
     // Calculate max zoom level based on image dimensions
