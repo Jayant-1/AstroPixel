@@ -13,6 +13,7 @@ import {
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import FileUploader from "../components/common/FileUploader";
+import { API_BASE_URL } from "../services/api";
 import Input from "../components/ui/Input";
 import ProcessingStatusBadge from "../components/ui/ProcessingStatusBadge";
 import { useApp } from "../context/AppContext";
@@ -256,9 +257,7 @@ const DatasetCard = ({ dataset, onClick }) => {
 
   // Preview image URL (served from backend static mount)
   const previewUrl = dataset.id
-    ? `${
-        import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"
-      }/datasets/${dataset.id}_preview.jpg`
+    ? `${API_BASE_URL}/datasets/${dataset.id}_preview.jpg`
     : null;
 
   const [imgError, setImgError] = useState(false);

@@ -1,23 +1,29 @@
-# MINIMAL requirements for 512MB Render free tier
-# Heavy processing libraries removed to fit in memory
-# Tile generation disabled - pre-upload tiles to R2 instead
+# Full requirements for local backend hosting
+# No memory limits - full tile generation capability
 
 # FastAPI Core
 fastapi==0.109.0
-uvicorn==0.27.0
+uvicorn[standard]==0.27.0
 python-multipart==0.0.6
 pydantic==2.5.3
 pydantic-settings==2.1.0
 
-# Database (PostgreSQL)
+# Database
 sqlalchemy==2.0.25
 psycopg2-binary==2.9.9
 
-# Image Processing (minimal - for metadata extraction only)
+# Image Processing
 Pillow==10.2.0
+numpy<2,>=1.24.0
+psd-tools>=1.9.0
+
+# Optional: GDAL/Rasterio for GeoTIFF (install via conda if needed)
+# rasterio==1.3.9
+# gdal==3.8.3
 
 # Utilities
 python-dotenv==1.0.0
+httpx==0.26.0
 aiofiles==23.2.1
 psutil==5.9.8
 
