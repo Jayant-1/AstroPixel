@@ -20,18 +20,24 @@ logger = logging.getLogger(__name__)
 class CloudStorage:
     """
     Cloud storage service for tiles using S3-compatible APIs (Cloudflare R2, AWS S3)
+    Uses lazy initialization to speed up app startup
     """
     
     def __init__(self):
         self.enabled = settings.USE_S3
-        self.client = None
+        self._client = None  # Lazy initialization
         self.bucket_name = settings.AWS_BUCKET_NAME
         self.public_url = getattr(settings, 'R2_PUBLIC_URL', None) or ""
+        self._initialized = False
         
-        logger.info(f"CloudStorage init: USE_S3={settings.USE_S3}, bucket={self.bucket_name}, public_url={self.public_url}")
-        
-        if self.enabled:
+        logger.info(f"CloudStorage config: USE_S3={settings.USE_S3}, bucket={self.bucket_name}")
+    
+    @property
+    def client(self):
+        """Lazy initialization of S3 client"""
+        if self._client is None and self.enabled and not self._initialized:
             self._init_client()
+        return self._client
     
     def _init_client(self):
         """Initialize S3/R2 client"""
@@ -58,11 +64,13 @@ class CloudStorage:
             else:
                 client_kwargs['region_name'] = settings.AWS_REGION
             
-            self.client = boto3.client(**client_kwargs)
+            self._client = boto3.client(**client_kwargs)
+            self._initialized = True
             logger.info(f"✅ Cloud storage initialized (bucket: {self.bucket_name})")
             
         except Exception as e:
             logger.error(f"❌ Failed to initialize cloud storage: {e}")
+            self._initialized = True  # Mark as initialized to prevent retry loops
             self.enabled = False
     
     def upload_file(self, local_path: Path, remote_key: str, content_type: Optional[str] = None) -> bool:

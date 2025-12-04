@@ -93,8 +93,6 @@ WINDOW_SIZE = 16384  # 16K×16K pixel chunks - balance between speed and memory
 # 1 = fastest, 9 = smallest file
 PNG_COMPRESS_LEVEL = 1  # FAST mode for speed
 
-logger.info(f"🚀 Tile Generator Config: {CPU_COUNT} CPUs, {MAX_WORKERS} workers")
-
 
 class PerfectTileGenerator:
     """
