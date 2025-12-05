@@ -157,9 +157,10 @@ const Viewer = () => {
 
   // CRITICAL: Check if selectedDataset matches URL datasetId
   // This prevents rendering ViewerCanvas with wrong dataset (causes image overlap)
-  const isCorrectDataset = selectedDataset && 
-    (String(selectedDataset.id) === String(datasetId) || 
-     selectedDataset.id === Number(datasetId));
+  const isCorrectDataset =
+    selectedDataset &&
+    (String(selectedDataset.id) === String(datasetId) ||
+      selectedDataset.id === Number(datasetId));
 
   if (!selectedDataset || !isCorrectDataset) {
     return (
