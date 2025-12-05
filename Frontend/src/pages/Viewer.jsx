@@ -52,6 +52,15 @@ const Viewer = () => {
   const [opacity, setOpacity] = useState(50);
   const [syncEnabled, setSyncEnabled] = useState(true);
 
+  // Clear selectedDataset immediately when datasetId changes to prevent overlap
+  useEffect(() => {
+    // If the URL datasetId doesn't match the current selectedDataset, clear it
+    if (selectedDataset && String(selectedDataset.id) !== String(datasetId)) {
+      console.log("🔄 Dataset ID changed, clearing old dataset");
+      setSelectedDataset(null);
+    }
+  }, [datasetId, selectedDataset, setSelectedDataset]);
+
   useEffect(() => {
     // Wait for datasets to load before checking
     if (loading) return;
