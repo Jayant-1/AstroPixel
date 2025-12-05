@@ -225,7 +225,15 @@ async def complete_chunked_upload(
         
         # Create dataset (same as regular upload)
         dataset_info = DatasetCreate(name=name, description=description, category=category)
-        dataset = await DatasetProcessor.create_dataset_entry(final_path, dataset_info, db)
+        
+        try:
+            dataset = await DatasetProcessor.create_dataset_entry(final_path, dataset_info, db)
+        except ValueError as ve:
+            logger.error(f"Dataset creation failed (ValueError): {ve}")
+            raise HTTPException(status_code=400, detail=str(ve))
+        except Exception as de:
+            logger.error(f"Dataset creation failed: {de}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Failed to create dataset: {str(de)}")
         
         background_tasks.add_task(
             DatasetProcessor.process_tiles_background,
@@ -236,8 +244,10 @@ async def complete_chunked_upload(
         logger.info(f"Dataset {dataset.id} created from chunked upload")
         return dataset
         
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions as-is
     except Exception as e:
-        logger.error(f"Error completing chunked upload: {e}")
+        logger.error(f"Error completing chunked upload: {e}", exc_info=True)
         # Clean up on error
         if upload_id in chunked_uploads:
             shutil.rmtree(session["temp_dir"], ignore_errors=True)
@@ -260,7 +270,9 @@ async def cancel_chunked_upload(upload_id: str):
 
 # ============================================================================
 # REGULAR UPLOAD ENDPOINT
-# ============================================================================@router.post("/datasets/upload", response_model=DatasetResponse, status_code=201)
+# ============================================================================
+
+@router.post("/datasets/upload", response_model=DatasetResponse, status_code=201)
 async def upload_dataset(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),

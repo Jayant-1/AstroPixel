@@ -1,107 +1,34 @@
-# 🚀 NASA Gigapixel Explorer - Backend API
+---
+title: AstroPixel Backend
+emoji: 🔭
+colorFrom: indigo
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+---
 
-FastAPI backend for processing and serving NASA gigapixel imagery.
+# AstroPixel - NASA Gigapixel Image Explorer Backend
 
-## ✅ Quick Start
+FastAPI backend for processing and serving NASA imagery tiles.
 
-### 1. Start the Server
+## Features
+- GeoTIFF tile generation using GDAL
+- Cloudflare R2 cloud storage integration
+- RESTful API for dataset management
+- OpenSeadragon-compatible tile serving
 
-```powershell
-.\start_server.ps1
-```
+## API Endpoints
+- `GET /api/health` - Health check
+- `GET /api/datasets` - List all datasets
+- `POST /api/datasets/upload` - Upload new dataset
+- `GET /api/tiles/{id}/{z}/{x}/{y}.png` - Get tile
 
-### 2. Access the API
-
-- **Swagger Docs**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-- **Health Check**: http://localhost:8000/api/health
-
-## 📦 Environment
-
-- **Python**: 3.11.13 (conda environment: `astropixel`)
-- **Database**: SQLite (development mode)
-- **Framework**: FastAPI 0.109.0
-
-## 🛠️ Configuration
-
-Edit `.env` file for settings:
-
-- Database URL
-- CORS origins
-- Upload/storage paths
-- Tile generation settings
-
-## 🔌 API Endpoints
-
-### Datasets
-
-- `POST /api/datasets` - Upload dataset
-- `GET /api/datasets` - List datasets
-- `GET /api/datasets/{id}` - Get dataset details
-- `DELETE /api/datasets/{id}` - Delete dataset
-
-### Tiles
-
-- `GET /api/tiles/{dataset_id}/{z}/{x}/{y}` - Get tile
-- `GET /api/tiles/{dataset_id}/metadata` - Get tile metadata
-
-### Search
-
-- `GET /api/search` - Search datasets
-- `GET /api/search/category/{category}` - Search by category
-
-### Health
-
-- `GET /health` - Server health check
-
-## 📁 Project Structure
-
-```
-Backend/
-├── app/
-│   ├── routers/        # API endpoints
-│   ├── services/       # Business logic
-│   ├── config.py       # Configuration
-│   ├── database.py     # Database setup
-│   ├── models.py       # Database models
-│   └── schemas.py      # Pydantic schemas
-├── .env                # Environment variables
-├── requirements.txt    # Python dependencies
-└── start_server.ps1    # Server startup script
-```
-
-## 🔄 Development
-
-### Install Dependencies
-
-```powershell
-conda activate astropixel
-pip install -r requirements.txt
-```
-
-### Run Tests
-
-```powershell
-pytest
-```
-
-### Format Code
-
-```powershell
-black app/
-flake8 app/
-```
-
-## 📝 Notes
-
-- **Annotations**: Disabled (requires PostgreSQL with PostGIS)
-- **Spatial Features**: Limited in SQLite mode
-- **For Production**: Consider PostgreSQL + PostGIS + Redis
-
-## 🆘 Support
-
-Check server logs for errors. Most issues are related to:
-
-1. Conda environment not activated
-2. Missing dependencies
-3. Database connection issues
+## Environment Variables
+Set these in your Space's Settings > Repository secrets:
+- `R2_ACCESS_KEY_ID`
+- `R2_SECRET_ACCESS_KEY`
+- `R2_ENDPOINT_URL`
+- `R2_BUCKET_NAME`
+- `R2_PUBLIC_URL`

@@ -22,6 +22,8 @@ except Exception:  # pragma: no cover - environment may not have GDAL
 try:
     from PIL import Image, PsdImagePlugin
     HAVE_PIL = True
+    # Disable decompression bomb check - we handle gigapixel images
+    Image.MAX_IMAGE_PIXELS = None
     # Explicitly register PSD/PSB format support
     Image.register_open(
         PsdImagePlugin.PsdImageFile.format,

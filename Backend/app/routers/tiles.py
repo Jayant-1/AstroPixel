@@ -41,7 +41,8 @@ async def get_tile(
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
-    if dataset.processing_status != "completed":
+    # Allow serving tiles if completed OR if tiles exist locally (processing might be stuck)
+    if dataset.processing_status not in ["completed", "processing"]:
         raise HTTPException(
             status_code=503, detail=f"Dataset is {dataset.processing_status}"
         )

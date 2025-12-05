@@ -16,6 +16,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import multiprocessing
 import threading
 
+# Disable decompression bomb protection - we handle gigapixel images
+Image.MAX_IMAGE_PIXELS = None
+
 logger = logging.getLogger(__name__)
 
 # Try to import GPU acceleration

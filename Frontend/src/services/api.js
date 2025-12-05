@@ -102,9 +102,15 @@ const api = {
 
     // For large files (>100MB), use chunked upload
     const CHUNK_THRESHOLD = 100 * 1024 * 1024; // 100MB
-    
+
     if (file.size > CHUNK_THRESHOLD) {
-      return this.uploadDatasetChunked(file, name, description, category, onUploadProgress);
+      return this.uploadDatasetChunked(
+        file,
+        name,
+        description,
+        category,
+        onUploadProgress
+      );
     }
 
     // Very long timeout for large file uploads
@@ -126,77 +132,96 @@ const api = {
   },
 
   // Chunked upload for large files (10GB+)
-  async uploadDatasetChunked(file, name, description, category, onUploadProgress) {
+  async uploadDatasetChunked(
+    file,
+    name,
+    description,
+    category,
+    onUploadProgress
+  ) {
     const CHUNK_SIZE = 8 * 1024 * 1024; // 8MB chunks
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    
-    console.log(`📦 Starting chunked upload: ${file.name} (${(file.size / (1024**3)).toFixed(2)} GB, ${totalChunks} chunks)`);
-    
+
+    console.log(
+      `📦 Starting chunked upload: ${file.name} (${(
+        file.size /
+        1024 ** 3
+      ).toFixed(2)} GB, ${totalChunks} chunks)`
+    );
+
     // Step 1: Initialize upload session
-    const initResponse = await apiClient.post('/api/datasets/upload/init', null, {
-      params: {
-        filename: file.name,
-        filesize: file.size,
-        total_chunks: totalChunks
+    const initResponse = await apiClient.post(
+      "/api/datasets/upload/init",
+      null,
+      {
+        params: {
+          filename: file.name,
+          filesize: file.size,
+          total_chunks: totalChunks,
+        },
       }
-    });
-    
+    );
+
     const { upload_id } = initResponse.data;
     console.log(`✅ Upload initialized: ${upload_id}`);
-    
+
     // Step 2: Upload chunks
     let uploadedChunks = 0;
-    
+
     for (let i = 0; i < totalChunks; i++) {
       const start = i * CHUNK_SIZE;
       const end = Math.min(start + CHUNK_SIZE, file.size);
       const chunk = file.slice(start, end);
-      
+
       const formData = new FormData();
-      formData.append('upload_id', upload_id);
-      formData.append('chunk_index', i.toString());
-      formData.append('chunk', chunk, `chunk_${i}`);
-      
-      await apiClient.post('/api/datasets/upload/chunk', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      formData.append("upload_id", upload_id);
+      formData.append("chunk_index", i.toString());
+      formData.append("chunk", chunk, `chunk_${i}`);
+
+      await apiClient.post("/api/datasets/upload/chunk", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
         timeout: 300000, // 5 min per chunk
       });
-      
+
       uploadedChunks++;
-      
+
       // Report progress
       if (onUploadProgress) {
         const progress = Math.round((uploadedChunks / totalChunks) * 100);
-        onUploadProgress({ 
-          loaded: end, 
+        onUploadProgress({
+          loaded: end,
           total: file.size,
           progress: progress,
           chunk: uploadedChunks,
-          totalChunks: totalChunks
+          totalChunks: totalChunks,
         });
       }
-      
+
       if (uploadedChunks % 10 === 0) {
-        console.log(`📤 Uploaded ${uploadedChunks}/${totalChunks} chunks (${Math.round(uploadedChunks/totalChunks*100)}%)`);
+        console.log(
+          `📤 Uploaded ${uploadedChunks}/${totalChunks} chunks (${Math.round(
+            (uploadedChunks / totalChunks) * 100
+          )}%)`
+        );
       }
     }
-    
+
     console.log(`✅ All chunks uploaded. Assembling file...`);
-    
+
     // Step 3: Complete upload
     const params = new URLSearchParams({
       upload_id: upload_id,
       name: name,
       category: category,
     });
-    if (description) params.append('description', description);
-    
+    if (description) params.append("description", description);
+
     const completeResponse = await apiClient.post(
       `/api/datasets/upload/complete?${params.toString()}`,
       null,
       { timeout: 600000 } // 10 min for assembly
     );
-    
+
     console.log(`🎉 Chunked upload complete!`);
     return completeResponse.data;
   },

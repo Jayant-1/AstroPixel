@@ -193,13 +193,18 @@ class DatasetProcessor:
             success = tile_gen.generate_tiles(progress_callback=update_progress)
 
             if success:
+                # Mark as completed FIRST and commit immediately
                 dataset.processing_status = "completed"
                 dataset.processing_progress = 100
-                logger.info(f"Dataset {dataset_id} processing completed")
+                db.commit()
+                logger.info(f"Dataset {dataset_id} processing completed - status committed")
 
                 # Generate preview thumbnail
                 preview_path = settings.DATASETS_DIR / f"{dataset_id}_preview.jpg"
-                tile_gen.generate_preview(preview_path)
+                try:
+                    tile_gen.generate_preview(preview_path)
+                except Exception as e:
+                    logger.error(f"Failed to generate preview: {e}")
                 
                 # Upload to cloud storage if enabled (Cloudflare R2)
                 if cloud_storage.enabled:
@@ -356,6 +361,7 @@ class DatasetProcessor:
                 else:
                     # Fallback preview generation
                     from PIL import Image
+                    Image.MAX_IMAGE_PIXELS = None  # Disable decompression bomb protection
 
                     with Image.open(file_path) as img:
                         img.thumbnail((512, 512))

@@ -1,13 +1,14 @@
-FROM python:3.11-slim
+# Hugging Face Spaces Dockerfile for AstroPixel Backend
+# Free tier: 2 vCPU, 16GB RAM - perfect for tile generation!
 
-WORKDIR /app
+FROM python:3.11-slim
 
 # Install system dependencies including GDAL
 RUN apt-get update && apt-get install -y \
     gdal-bin \
     libgdal-dev \
-    gcc \
-    g++ \
+    python3-gdal \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Set GDAL environment variables
@@ -15,21 +16,35 @@ ENV GDAL_CONFIG=/usr/bin/gdal-config
 ENV CPLUS_INCLUDE_PATH=/usr/include/gdal
 ENV C_INCLUDE_PATH=/usr/include/gdal
 
-# Copy requirements
-COPY requirements.txt .
+# Create non-root user (required by HF Spaces)
+RUN useradd -m -u 1000 user
+USER user
+ENV HOME=/home/user \
+    PATH=/home/user/.local/bin:$PATH
+
+WORKDIR $HOME/app
+
+# Copy requirements first for caching
+COPY --chown=user requirements-huggingface.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements-huggingface.txt
 
 # Copy application code
-COPY . .
+COPY --chown=user app/ ./app/
 
 # Create necessary directories
-RUN mkdir -p uploads tiles datasets temp
+RUN mkdir -p uploads tiles datasets temp static
 
-# Expose port (informational)
-EXPOSE 8000
+# Environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PORT=7860
+ENV USE_S3=true
+ENV DATABASE_URL=sqlite:///./nasa_explorer.db
 
-# Run application
-# Use shell form so $PORT (provided by Render) is expanded. Reduce workers to 1 to lower memory usage on small instances.
-CMD uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+# Hugging Face Spaces uses port 7860
+EXPOSE 7860
+
+# Run the application
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
