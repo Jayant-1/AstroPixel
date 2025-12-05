@@ -50,6 +50,13 @@ const ViewerCanvas = ({ dataset, onReady, mode }) => {
       return; // Don't re-initialize for same dataset unless showGrid changed
     }
 
+    // IMPORTANT: Destroy existing viewer FIRST before creating new one
+    if (viewerRef.current) {
+      console.log("🧹 Destroying previous viewer before creating new one");
+      viewerRef.current.destroy();
+      viewerRef.current = null;
+    }
+
     // Update showGrid tracking
     lastShowGridRef.current = viewerSettings.showGrid;
 

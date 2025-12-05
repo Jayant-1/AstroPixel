@@ -306,6 +306,7 @@ const Viewer = () => {
         <div className="flex-1 relative bg-gray-900">
           {viewMode === "compare" ? (
             <ComparisonView
+              key={`compare-${selectedDataset.id}`}
               dataset={selectedDataset}
               renderControlsOnly={false}
               comparisonMode={comparisonMode}
@@ -319,6 +320,7 @@ const Viewer = () => {
             />
           ) : (
             <ViewerCanvas
+              key={`viewer-${selectedDataset.id}`}
               dataset={selectedDataset}
               mode={viewMode}
               onReady={() => setViewerReady(true)}
