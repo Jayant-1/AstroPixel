@@ -60,6 +60,12 @@ const ViewerCanvas = ({ dataset, onReady, mode }) => {
       viewerSettings.showGrid
     );
 
+    // Clear existing viewer content before creating new one
+    const container = document.getElementById("openseadragon-viewer");
+    if (container) {
+      container.innerHTML = "";
+    }
+
     // Calculate max zoom level based on image dimensions
     const tileSize = dataset.tile_size || 256;
     const maxLevel = Math.max(
@@ -232,17 +238,17 @@ const ViewerCanvas = ({ dataset, onReady, mode }) => {
 
     // Cleanup
     return () => {
-      console.log("🧹 Cleaning up viewer instance");
+      console.log("🧹 Cleaning up viewer instance for dataset:", dataset?.id);
       if (svg && svg.parentNode) {
         svg.parentNode.removeChild(svg);
       }
       if (viewerInstance) {
         viewerInstance.destroy();
       }
-      // Reset refs so re-initialization can happen
+      // Reset ALL refs so re-initialization happens cleanly
       viewerRef.current = null;
+      initializedDatasetIdRef.current = null; // Reset to allow new dataset to initialize
       setViewer(null);
-      // Note: Don't reset initializedDatasetIdRef here - it's handled by the showGrid check
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataset?.id, viewerSettings.showGrid]); // Re-initialize only when dataset or showGrid changes
