@@ -155,7 +155,13 @@ const Viewer = () => {
     }
   }, [viewMode, selectedDataset, datasets, secondDataset]);
 
-  if (!selectedDataset) {
+  // CRITICAL: Check if selectedDataset matches URL datasetId
+  // This prevents rendering ViewerCanvas with wrong dataset (causes image overlap)
+  const isCorrectDataset = selectedDataset && 
+    (String(selectedDataset.id) === String(datasetId) || 
+     selectedDataset.id === Number(datasetId));
+
+  if (!selectedDataset || !isCorrectDataset) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-950">
         <div className="text-center">
