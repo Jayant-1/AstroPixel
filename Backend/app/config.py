@@ -78,10 +78,24 @@ class Settings(BaseSettings):
     S3_ENDPOINT_URL: str = ""  # R2 endpoint: https://<account_id>.r2.cloudflarestorage.com
     R2_PUBLIC_URL: str = ""  # Public bucket URL: https://pub-xxxx.r2.dev
 
-    class Config:
-        # Ensure the .env in the project root (Backend/.env) is loaded
-        env_file = str(Path(__file__).resolve().parent.parent / ".env")
-        case_sensitive = True
+    @field_validator("USE_S3", mode="before")
+    @classmethod
+    def parse_use_s3(cls, v):
+        """Parse USE_S3 from string/bool"""
+        if isinstance(v, str):
+            return v.lower() in ('true', '1', 'yes')
+        return bool(v)
+
+    model_config = {
+        # Load from .env if it exists, but environment variables take priority
+        # HF Spaces uses environment variables (secrets), not .env file
+        "env_file": str(Path(__file__).resolve().parent.parent / ".env"),
+        "env_file_encoding": "utf-8",
+        "case_sensitive": True,
+        "extra": "ignore",
+        # Validate on assignment to catch issues early
+        "validate_assignment": True,
+    }
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

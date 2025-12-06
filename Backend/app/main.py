@@ -45,6 +45,14 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     logger.info("Starting NASA Gigapixel Explorer API...")
+    
+    # Log R2/Cloud Storage configuration
+    logger.info(f"Cloud Storage (R2) Configuration:")
+    logger.info(f"  USE_S3: {settings.USE_S3}")
+    logger.info(f"  Bucket: {settings.AWS_BUCKET_NAME}")
+    logger.info(f"  Region: {settings.AWS_REGION}")
+    logger.info(f"  Endpoint: {settings.S3_ENDPOINT_URL}")
+    logger.info(f"  Public URL: {settings.R2_PUBLIC_URL}")
 
     try:
         # Initialize database
@@ -136,7 +144,7 @@ except Exception as e:
 
 
 # Include routers
-app.include_router(health.router, tags=["Health"])
+app.include_router(health.router, prefix="/api", tags=["Health"])
 app.include_router(auth.router, prefix=f"{settings.API_PREFIX}/auth", tags=["Authentication"])
 app.include_router(admin.router, prefix=settings.API_PREFIX, tags=["Admin"])
 app.include_router(datasets.router, prefix=settings.API_PREFIX, tags=["Datasets"])

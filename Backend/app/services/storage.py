@@ -92,6 +92,12 @@ class CloudStorage:
             True if successful
         """
         if not self.enabled:
+            logger.debug(f"Cloud storage disabled, skipping upload of {local_path}")
+            return False
+        
+        # Ensure client is initialized
+        if self.client is None:
+            logger.error(f"Cloud storage client not initialized when uploading {local_path}")
             return False
         
         try:
@@ -99,23 +105,23 @@ class CloudStorage:
                 content_type, _ = mimetypes.guess_type(str(local_path))
                 content_type = content_type or 'application/octet-stream'
             
-            extra_args = {
-                'ContentType': content_type,
-                'CacheControl': 'public, max-age=31536000',  # 1 year cache for tiles
-            }
+            logger.debug(f"Uploading {local_path} → {remote_key} (type: {content_type})")
             
-            self.client.upload_file(
-                str(local_path),
-                self.bucket_name,
-                remote_key,
-                ExtraArgs=extra_args
-            )
+            # Use put_object instead of upload_file for better error handling with R2
+            with open(local_path, 'rb') as file_data:
+                self.client.put_object(
+                    Bucket=self.bucket_name,
+                    Key=remote_key,
+                    Body=file_data,
+                    ContentType=content_type,
+                    CacheControl='public, max-age=31536000'  # 1 year cache for tiles
+                )
             
-            logger.debug(f"Uploaded {local_path} to {remote_key}")
+            logger.info(f"✅ Uploaded {local_path.name} to R2: {remote_key}")
             return True
             
         except Exception as e:
-            logger.error(f"Failed to upload {local_path}: {e}")
+            logger.error(f"❌ Failed to upload {local_path.name} to R2: {e}", exc_info=True)
             return False
     
     def upload_tiles_directory(self, local_dir: Path, dataset_id: int, 
@@ -132,25 +138,34 @@ class CloudStorage:
             Number of files uploaded
         """
         if not self.enabled:
+            logger.warning(f"Cloud storage disabled, skipping tile upload for dataset {dataset_id}")
+            return 0
+        
+        if not local_dir.exists():
+            logger.error(f"Tiles directory not found: {local_dir}")
             return 0
         
         uploaded = 0
         files = list(local_dir.rglob('*'))
         total_files = len([f for f in files if f.is_file()])
         
+        logger.info(f"📤 Starting tile upload: {total_files} files from {local_dir} for dataset {dataset_id}")
+        
         for file_path in files:
             if file_path.is_file():
                 # Create remote key: tiles/{dataset_id}/{z}/{x}/{y}.jpg
                 relative_path = file_path.relative_to(local_dir)
-                remote_key = f"tiles/{dataset_id}/{relative_path}"
+                remote_key = f"tiles/{dataset_id}/{relative_path}".replace("\\", "/")  # Ensure forward slashes
                 
                 if self.upload_file(file_path, remote_key):
                     uploaded += 1
+                else:
+                    logger.warning(f"Failed to upload tile: {file_path.name}")
                     
                 if progress_callback:
                     progress_callback(uploaded, total_files)
         
-        logger.info(f"✅ Uploaded {uploaded}/{total_files} tiles to cloud storage")
+        logger.info(f"✅ Uploaded {uploaded}/{total_files} tiles to R2 for dataset {dataset_id}")
         return uploaded
     
     def get_tile_url(self, dataset_id: int, z: int, x: int, y: int, format: str = 'jpg') -> Optional[str]:
@@ -227,14 +242,23 @@ class CloudStorage:
             Public URL of the preview or None
         """
         if not self.enabled:
+            logger.debug(f"Cloud storage disabled, skipping preview upload")
+            return None
+        
+        if not local_path.exists():
+            logger.warning(f"Preview file not found: {local_path}")
             return None
         
         remote_key = f"previews/{dataset_id}_preview.jpg"
         
+        logger.info(f"📤 Uploading preview for dataset {dataset_id}")
         if self.upload_file(local_path, remote_key, 'image/jpeg'):
             if self.public_url:
-                return f"{self.public_url}/{remote_key}"
+                preview_url = f"{self.public_url}/{remote_key}"
+                logger.info(f"✅ Preview uploaded: {preview_url}")
+                return preview_url
         
+        logger.error(f"Failed to upload preview for dataset {dataset_id}")
         return None
 
     def save_dataset_metadata(self, dataset_dict: dict) -> bool:

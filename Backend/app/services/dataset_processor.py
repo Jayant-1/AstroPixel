@@ -160,25 +160,42 @@ class DatasetProcessor:
             dataset.processing_progress = 0
             db.commit()
 
-            # LAZY IMPORT: Only load heavy tile generator when actually needed
-            # On minimal installs (512MB RAM), this may fail - that's OK
+            # LAZY IMPORT: Try perfect tile generator first, fall back to simple generator
+            tile_path = Path(dataset.tile_base_path)
+            tile_gen = None
+            
             try:
                 from app.services.perfect_tile_generator import PerfectTileGenerator
-                
-                # Use Perfect Tile Generator
-                tile_path = Path(dataset.tile_base_path)
                 tile_gen = PerfectTileGenerator(
                     input_file=file_path,
                     output_dir=tile_path,
                     tile_size=settings.TILE_SIZE,
                 )
-            except ImportError as e:
-                logger.error(f"Tile generation not available: {e}")
-                logger.error("This server is configured for tile serving only, not generation.")
-                logger.error("Pre-generate tiles locally and upload to R2.")
+                logger.info(f"Using PerfectTileGenerator for dataset {dataset_id}")
+            except Exception as e:
+                logger.warning(f"PerfectTileGenerator not available: {e}")
+                logger.info(f"Falling back to SimpleTileGenerator")
+                
+                try:
+                    from app.services.simple_tile_generator import SimpleTileGenerator
+                    tile_gen = SimpleTileGenerator(
+                        input_file=file_path,
+                        output_dir=tile_path,
+                        tile_size=settings.TILE_SIZE,
+                    )
+                except Exception as e2:
+                    logger.error(f"SimpleTileGenerator also failed: {e2}")
+                    dataset.processing_status = "failed"
+                    dataset.extra_metadata = dataset.extra_metadata or {}
+                    dataset.extra_metadata['error'] = f"No tile generator available: {str(e2)}"
+                    db.commit()
+                    return
+            
+            if not tile_gen:
+                logger.error("No tile generator could be initialized")
                 dataset.processing_status = "failed"
                 dataset.extra_metadata = dataset.extra_metadata or {}
-                dataset.extra_metadata['error'] = "Tile generation not available on this server. Pre-generate tiles locally and upload to R2."
+                dataset.extra_metadata['error'] = "No tile generator available"
                 db.commit()
                 return
 
@@ -207,12 +224,13 @@ class DatasetProcessor:
                     logger.error(f"Failed to generate preview: {e}")
                 
                 # Upload to cloud storage if enabled (Cloudflare R2)
+                logger.info(f"Cloud storage enabled: {cloud_storage.enabled}, Bucket: {cloud_storage.bucket_name}, Public URL: {cloud_storage.public_url}")
                 if cloud_storage.enabled:
-                    logger.info(f"Uploading tiles to cloud storage for dataset {dataset_id}")
+                    logger.info(f"📤 Uploading tiles to R2 for dataset {dataset_id}")
                     try:
                         tile_path = Path(dataset.tile_base_path)
                         uploaded = cloud_storage.upload_tiles_directory(tile_path, dataset_id)
-                        logger.info(f"Uploaded {uploaded} tiles to cloud storage")
+                        logger.info(f"✅ Successfully uploaded {uploaded} tiles to R2")
                         
                         # Mark tiles as uploaded to cloud
                         dataset.extra_metadata = dataset.extra_metadata or {}
@@ -224,19 +242,20 @@ class DatasetProcessor:
                             preview_url = cloud_storage.upload_preview(preview_path, dataset_id)
                             if preview_url:
                                 dataset.extra_metadata['preview_url'] = preview_url
-                                logger.info(f"Uploaded preview to: {preview_url}")
+                                logger.info(f"✅ Uploaded preview to: {preview_url}")
                         
-                        # Save dataset metadata to R2 for persistence across restarts
-                        db.commit()  # Commit first to ensure all metadata is saved
+                        # Save dataset metadata to R2
+                        db.commit()
                         db.refresh(dataset)
                         DatasetProcessor._save_dataset_metadata_to_cloud(dataset)
                         
-                        # Optionally clean up local tiles to save space
-                        # shutil.rmtree(tile_path)  # Uncomment to delete local tiles after upload
-                        
                     except Exception as e:
-                        logger.error(f"Failed to upload to cloud storage: {e}")
-                        # Don't fail the whole process, tiles still exist locally
+                        logger.error(f"❌ Failed to upload to R2: {e}", exc_info=True)
+                        dataset.extra_metadata = dataset.extra_metadata or {}
+                        dataset.extra_metadata['r2_upload_error'] = str(e)
+                        db.commit()
+                else:
+                    logger.warning(f"⚠️  Cloud storage disabled - tiles NOT uploaded to R2 (tiles available locally only)")
             else:
                 dataset.processing_status = "failed"
                 dataset.processing_progress = 0
