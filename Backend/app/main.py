@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import logging
 from datetime import datetime
+import threading
 
 from app.config import settings
 from app.database import init_db, create_spatial_indexes
@@ -18,8 +19,12 @@ from app.routers import (
     search,
     health,
     annotations_simple,
+    auth,
+    admin,
 )
 from app.routers.datasets import preview_router
+from app.middleware.rate_limit import RateLimitMiddleware
+from app.services.cleanup import cleanup_scheduler
 
 # Configure Starlette to accept large uploads
 import starlette.datastructures
@@ -46,6 +51,22 @@ async def lifespan(app: FastAPI):
         init_db()
         create_spatial_indexes()
         logger.info("Database initialized successfully")
+        
+        # Start cleanup scheduler in background thread (it handles its own event loop)
+        def run_cleanup_scheduler():
+            """Run cleanup scheduler in a separate thread with its own event loop"""
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(cleanup_scheduler())
+            finally:
+                loop.close()
+        
+        cleanup_thread = threading.Thread(target=run_cleanup_scheduler, daemon=True)
+        cleanup_thread.start()
+        logger.info("Cleanup scheduler started (runs every hour)")
+        
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
 
@@ -64,6 +85,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+# Rate limiting middleware (add BEFORE CORS)
+app.add_middleware(RateLimitMiddleware)
 
 # CORS middleware
 app.add_middleware(
@@ -113,6 +137,8 @@ except Exception as e:
 
 # Include routers
 app.include_router(health.router, tags=["Health"])
+app.include_router(auth.router, prefix=f"{settings.API_PREFIX}/auth", tags=["Authentication"])
+app.include_router(admin.router, prefix=settings.API_PREFIX, tags=["Admin"])
 app.include_router(datasets.router, prefix=settings.API_PREFIX, tags=["Datasets"])
 app.include_router(tiles.router, prefix=settings.API_PREFIX, tags=["Tiles"])
 app.include_router(
@@ -131,6 +157,7 @@ async def root():
         "timestamp": datetime.utcnow().isoformat(),
         "documentation": "/docs",
         "endpoints": {
+            "auth": f"{settings.API_PREFIX}/auth",
             "datasets": f"{settings.API_PREFIX}/datasets",
             "tiles": f"{settings.API_PREFIX}/tiles",
             "annotations": f"{settings.API_PREFIX}/annotations",

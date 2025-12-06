@@ -1,10 +1,12 @@
 import { motion } from "framer-motion";
-import { Menu, X } from "lucide-react";
+import { LogIn, Menu, User, X } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { isAuthenticated, user } = useAuth();
 
   const navLinks = [
     { name: "Features", href: "/#features", isHash: true },
@@ -56,15 +58,42 @@ const Navbar = () => {
               )}
             </div>
 
-            {/* CTA Button */}
-            <div className="hidden md:block">
-              <Link
-                to="/dashboard"
-                className="glass-panel glass-panel-hover px-5 py-2.5 text-white font-medium hover:scale-105 transition-all duration-300 inline-flex items-center gap-2"
-              >
-                <span>Launch App</span>
-                <span className="text-lg">🚀</span>
-              </Link>
+            {/* Auth & CTA Buttons */}
+            <div className="hidden md:flex items-center gap-3">
+              {isAuthenticated ? (
+                <>
+                  <Link
+                    to="/dashboard"
+                    className="flex items-center gap-2 text-zinc-300 hover:text-white font-medium transition-colors"
+                  >
+                    <User className="w-4 h-4" />
+                    {user?.username || "Profile"}
+                  </Link>
+                  <Link
+                    to="/dashboard"
+                    className="glass-panel glass-panel-hover px-5 py-2.5 text-white font-medium hover:scale-105 transition-all duration-300 inline-flex items-center gap-2"
+                  >
+                    <span>Dashboard</span>
+                    <span className="text-lg">🚀</span>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link
+                    to="/login"
+                    className="flex items-center gap-2 text-zinc-300 hover:text-white font-medium transition-colors px-4 py-2"
+                  >
+                    <LogIn className="w-4 h-4" />
+                    Sign in
+                  </Link>
+                  <Link
+                    to="/signup"
+                    className="glass-panel glass-panel-hover px-5 py-2.5 text-white font-medium hover:scale-105 transition-all duration-300 inline-flex items-center gap-2"
+                  >
+                    <span>Get Started</span>
+                  </Link>
+                </>
+              )}
             </div>
 
             {/* Mobile Menu Button */}
@@ -106,13 +135,34 @@ const Navbar = () => {
                     </Link>
                   )
                 )}
-                <Link
-                  to="/dashboard"
-                  className="glass-panel glass-panel-hover px-5 py-2.5 text-white font-medium text-center mt-2"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Launch App 🚀
-                </Link>
+                <div className="border-t border-white/10 pt-4 mt-2 flex flex-col gap-3">
+                  {isAuthenticated ? (
+                    <Link
+                      to="/dashboard"
+                      className="glass-panel glass-panel-hover px-5 py-2.5 text-white font-medium text-center"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Dashboard 🚀
+                    </Link>
+                  ) : (
+                    <>
+                      <Link
+                        to="/login"
+                        className="text-zinc-300 hover:text-white font-medium text-center py-2"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        Sign in
+                      </Link>
+                      <Link
+                        to="/signup"
+                        className="glass-panel glass-panel-hover px-5 py-2.5 text-white font-medium text-center"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        Get Started
+                      </Link>
+                    </>
+                  )}
+                </div>
               </div>
             </motion.div>
           )}

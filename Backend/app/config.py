@@ -19,21 +19,20 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     API_PREFIX: str = "/api"
 
-    # Database
-    # A sensible default for local development; production should set DATABASE_URL
-    DATABASE_URL: str = "sqlite:///./nasa_explorer.db"
-    DB_HOST: str = "localhost"
+    # Database - Neon PostgreSQL for production
+    DATABASE_URL: str = "postgresql://neondb_owner:npg_EyAmX9YpNq8l@ep-patient-sky-ah05n60d-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+    DB_HOST: str = "ep-patient-sky-ah05n60d-pooler.c-3.us-east-1.aws.neon.tech"
     DB_PORT: int = 5432
-    DB_NAME: str = "nasa_explorer"
-    DB_USER: str = "postgres"
-    DB_PASSWORD: str = "password"
+    DB_NAME: str = "neondb"
+    DB_USER: str = "neondb_owner"
+    DB_PASSWORD: str = "npg_EyAmX9YpNq8l"
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
 
-    # Storage
+    # Storage - Base directories
     BASE_DIR: Path = Path(__file__).resolve().parent.parent
     UPLOAD_DIR: Path = BASE_DIR / "uploads"
     TILES_DIR: Path = BASE_DIR / "tiles"

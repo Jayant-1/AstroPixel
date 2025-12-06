@@ -41,6 +41,7 @@ class DatasetResponse(BaseModel):
     name: str
     description: Optional[str]
     category: str
+    owner_id: Optional[int] = None
     width: int
     height: int
     max_zoom: int
@@ -48,6 +49,9 @@ class DatasetResponse(BaseModel):
     tile_size: int
     processing_status: str
     processing_progress: int = 0  # 0-100 percentage
+    is_demo: bool = False
+    expires_at: Optional[datetime] = None
+    time_until_expiry: Optional[str] = None  # Human-readable time remaining
     created_at: datetime
     updated_at: datetime
     extra_metadata: Optional[Dict[str, Any]] = None
@@ -242,3 +246,74 @@ class HealthResponse(BaseModel):
     timestamp: datetime
     database: bool
     redis: bool
+
+
+# ===========================
+# Auth Schemas
+# ===========================
+
+
+class UserCreate(BaseModel):
+    """Schema for user registration"""
+
+    email: str = Field(..., min_length=5, max_length=255)
+    username: str = Field(..., min_length=3, max_length=100)
+    password: str = Field(..., min_length=6, max_length=100)
+    full_name: Optional[str] = Field(None, max_length=255)
+
+    @validator("email")
+    def validate_email(cls, v):
+        if "@" not in v or "." not in v:
+            raise ValueError("Invalid email format")
+        return v.lower().strip()
+
+    @validator("username")
+    def validate_username(cls, v):
+        import re
+        if not re.match(r'^[a-zA-Z0-9_]+$', v):
+            raise ValueError("Username can only contain letters, numbers, and underscores")
+        return v.lower().strip()
+
+
+class UserLogin(BaseModel):
+    """Schema for user login"""
+
+    email: str
+    password: str
+
+
+class UserResponse(BaseModel):
+    """Schema for user response (no password)"""
+
+    id: int
+    email: str
+    username: str
+    full_name: Optional[str]
+    avatar_url: Optional[str]
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class UserUpdate(BaseModel):
+    """Schema for updating user profile"""
+
+    full_name: Optional[str] = Field(None, max_length=255)
+    avatar_url: Optional[str] = Field(None, max_length=500)
+
+
+class Token(BaseModel):
+    """Schema for JWT token response"""
+
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
+class TokenData(BaseModel):
+    """Schema for decoded token data"""
+
+    user_id: Optional[int] = None
+    email: Optional[str] = None

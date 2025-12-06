@@ -34,7 +34,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY --chown=user app/ ./app/
 
-# Create necessary directories
+# Create necessary directories (fallback if /data not available)
 RUN mkdir -p uploads tiles datasets temp static
 
 # Environment variables

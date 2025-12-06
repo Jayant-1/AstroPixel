@@ -23,8 +23,10 @@ import aiofiles
 import uuid
 import os
 
+from datetime import datetime, timedelta
+
 from app.database import get_db
-from app.models import Dataset
+from app.models import Dataset, User
 from app.schemas import (
     DatasetCreate,
     DatasetResponse,
@@ -36,6 +38,8 @@ from app.schemas import (
 )
 from app.services.storage import cloud_storage
 from app.services.dataset_processor import DatasetProcessor
+from app.services.cleanup import get_time_until_expiry
+from app.services.auth import get_current_user, get_current_user_required
 from app.config import settings
 
 # Optimized chunk size for fast uploads (8MB chunks)
@@ -282,6 +286,7 @@ async def upload_dataset(
         ..., description="Dataset category", pattern="^(earth|mars|space)$"
     ),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_required),
 ):
     """
     Upload and process a new dataset
@@ -327,6 +332,13 @@ async def upload_dataset(
     try:
         dataset = await DatasetProcessor.create_dataset_entry(file_path, dataset_info, db)
         
+        # Set owner and expiry for user uploads (not demo datasets)
+        dataset.owner_id = current_user.id
+        dataset.is_demo = False
+        dataset.expires_at = datetime.utcnow() + timedelta(hours=24)
+        db.commit()
+        db.refresh(dataset)
+        
         # Start background tile generation (pass dataset.id, not db session)
         background_tasks.add_task(
             DatasetProcessor.process_tiles_background,
@@ -334,7 +346,7 @@ async def upload_dataset(
             file_path
         )
         
-        logger.info(f"Dataset {dataset.id} created, tile generation started in background")
+        logger.info(f"Dataset {dataset.id} created by user {current_user.id}, expires at {dataset.expires_at}")
         return dataset
         
     except ValueError as e:
@@ -421,9 +433,12 @@ async def list_datasets(
         100, ge=1, le=1000, description="Maximum number of records to return"
     ),
     db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
 ):
     """
-    List all datasets with optional filtering
+    List datasets:
+    - Authenticated users: Only their own datasets
+    - Guest users: Only demo datasets (is_demo=True)
 
     - **category**: Filter by category (earth, mars, space)
     - **status**: Filter by processing status (pending, processing, completed, failed)
@@ -432,6 +447,14 @@ async def list_datasets(
     """
     query = db.query(Dataset)
 
+    # Filter by ownership: users see only their datasets, guests see only demos
+    if current_user:
+        # Authenticated user: show only their datasets
+        query = query.filter(Dataset.owner_id == current_user.id)
+    else:
+        # Guest user: show only demo datasets
+        query = query.filter(Dataset.is_demo == True)
+
     if category:
         query = query.filter(Dataset.category == category)
 
@@ -439,7 +462,22 @@ async def list_datasets(
         query = query.filter(Dataset.processing_status == status)
 
     datasets = query.order_by(Dataset.created_at.desc()).offset(skip).limit(limit).all()
-    return datasets
+    
+    # Calculate time_until_expiry for datasets expiring within 1 hour
+    result = []
+    for dataset in datasets:
+        dataset_dict = DatasetResponse.model_validate(dataset).model_dump()
+        
+        # Add time until expiry if dataset expires within 1 hour
+        if dataset.expires_at:
+            now = datetime.utcnow()
+            time_left = (dataset.expires_at - now).total_seconds()
+            if 0 < time_left <= 3600:  # Show only if expiring within 1 hour
+                dataset_dict['time_until_expiry'] = get_time_until_expiry(dataset.expires_at)
+        
+        result.append(DatasetResponse(**dataset_dict))
+    
+    return result
 
 
 @router.get("/datasets/{dataset_id}", response_model=DatasetDetail)
@@ -459,10 +497,17 @@ async def get_dataset(dataset_id: int, db: Session = Depends(get_db)):
 
 @router.put("/datasets/{dataset_id}", response_model=DatasetResponse)
 async def update_dataset(
-    dataset_id: int, dataset_update: DatasetUpdate, db: Session = Depends(get_db)
+    dataset_id: int, 
+    dataset_update: DatasetUpdate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_required)
 ):
     """
     Update dataset metadata
+    
+    Restrictions:
+    - Only the owner can update their dataset
+    - Demo datasets cannot be modified
 
     - **dataset_id**: ID of the dataset
     - **dataset_update**: Fields to update
@@ -471,6 +516,20 @@ async def update_dataset(
 
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    # Prevent modification of demo datasets
+    if dataset.is_demo:
+        raise HTTPException(
+            status_code=403,
+            detail="Demo datasets cannot be modified"
+        )
+    
+    # Check ownership
+    if dataset.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="You don't have permission to update this dataset"
+        )
 
     # Update fields
     if dataset_update.name is not None:
@@ -487,17 +546,44 @@ async def update_dataset(
 
 
 @router.delete("/datasets/{dataset_id}", response_model=MessageResponse)
-async def delete_dataset(dataset_id: int, db: Session = Depends(get_db)):
+async def delete_dataset(
+    dataset_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_required)
+):
     """
     Delete dataset and associated tiles
+    
+    Restrictions:
+    - Only the owner can delete their dataset
+    - Demo datasets cannot be deleted by anyone
 
     - **dataset_id**: ID of the dataset to delete
     """
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    # Prevent deletion of demo datasets
+    if dataset.is_demo:
+        raise HTTPException(
+            status_code=403, 
+            detail="Demo datasets cannot be deleted"
+        )
+    
+    # Check ownership
+    if dataset.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="You don't have permission to delete this dataset"
+        )
+    
     success = DatasetProcessor.delete_dataset(dataset_id, db)
 
     if not success:
         raise HTTPException(
-            status_code=404, detail="Dataset not found or could not be deleted"
+            status_code=500, detail="Failed to delete dataset"
         )
 
     return MessageResponse(message=f"Dataset {dataset_id} deleted successfully")

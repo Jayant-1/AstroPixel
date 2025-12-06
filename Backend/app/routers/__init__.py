@@ -8,6 +8,9 @@ from app.routers import (
     search,
     health,
     annotations_simple,
+    auth,
+    admin,
 )
 
-__all__ = ["datasets", "tiles", "search", "health", "annotations_simple"]
+__all__ = ["datasets", "tiles", "search", "health", "annotations_simple", "auth", "admin"]
+

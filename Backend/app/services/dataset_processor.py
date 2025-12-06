@@ -226,6 +226,11 @@ class DatasetProcessor:
                                 dataset.extra_metadata['preview_url'] = preview_url
                                 logger.info(f"Uploaded preview to: {preview_url}")
                         
+                        # Save dataset metadata to R2 for persistence across restarts
+                        db.commit()  # Commit first to ensure all metadata is saved
+                        db.refresh(dataset)
+                        DatasetProcessor._save_dataset_metadata_to_cloud(dataset)
+                        
                         # Optionally clean up local tiles to save space
                         # shutil.rmtree(tile_path)  # Uncomment to delete local tiles after upload
                         
@@ -542,6 +547,59 @@ class DatasetProcessor:
                 },
                 "total_pixels": total_pixels,
             }
+
+        except Exception as e:
+            logger.error(f"Error getting dataset stats: {e}")
+            return {}
+
+    @staticmethod
+    def _save_dataset_metadata_to_cloud(dataset: Dataset) -> bool:
+        """
+        Save dataset metadata to R2 for persistence across restarts
+        Only saves DEMO datasets as per production requirements.
+        
+        Args:
+            dataset: Dataset model instance
+            
+        Returns:
+            True if successful
+        """
+        try:
+            if not cloud_storage.enabled:
+                return False
+            
+            # Only persist demo datasets to R2 metadata
+            if not dataset.is_demo:
+                logger.info(f"Skipping R2 metadata save for non-demo dataset {dataset.id}")
+                return False
+            
+            # Convert dataset to dictionary using current model field names
+            dataset_dict = {
+                'id': dataset.id,
+                'name': dataset.name,
+                'description': dataset.description,
+                'category': dataset.category,
+                'original_file_path': dataset.original_file_path,
+                'tile_base_path': dataset.tile_base_path,
+                'width': dataset.width,
+                'height': dataset.height,
+                'tile_size': dataset.tile_size,
+                'min_zoom': dataset.min_zoom,
+                'max_zoom': dataset.max_zoom,
+                'processing_status': dataset.processing_status,
+                'extra_metadata': dataset.extra_metadata or {},
+                'created_at': str(dataset.created_at) if dataset.created_at else None,
+                'updated_at': str(dataset.updated_at) if dataset.updated_at else None,
+            }
+            
+            success = cloud_storage.save_dataset_metadata(dataset_dict)
+            if success:
+                logger.info(f"✅ Saved dataset {dataset.id} metadata to R2")
+            return success
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to save dataset metadata to cloud: {e}")
+            return False
 
         except Exception as e:
             logger.error(f"Error getting dataset stats: {e}")

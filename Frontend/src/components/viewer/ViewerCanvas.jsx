@@ -99,7 +99,9 @@ const ViewerCanvas = ({ dataset, onReady, mode }) => {
           maxLevel: maxLevel,
           getTileUrl: function (level, x, y) {
             // Use png format to match tiles stored in R2
-            return `${API_BASE_URL}/api/tiles/${dataset.id}/${level}/${x}/${y}.png`;
+            const token = localStorage.getItem("astropixel_token");
+            const url = `${API_BASE_URL}/api/tiles/${dataset.id}/${level}/${x}/${y}.png`;
+            return token ? `${url}?token=${token}` : url;
           },
         },
 

@@ -14,13 +14,13 @@ const apiClient = axios.create({
   },
 });
 
-// Request interceptor for adding auth token (future use)
+// Request interceptor for adding auth token
 apiClient.interceptors.request.use(
   (config) => {
-    // const token = localStorage.getItem('token');
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`;
-    // }
+    const token = localStorage.getItem("astropixel_token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => Promise.reject(error)
@@ -64,6 +64,7 @@ apiClient.interceptors.response.use(
 
 // API methods
 const api = {
+  apiClient, // Expose axios instance for direct usage
   // Datasets
   async fetchDatasets(params = {}) {
     const response = await apiClient.get("/api/datasets", { params });
@@ -336,6 +337,55 @@ const api = {
   // Health check
   async healthCheck() {
     const response = await apiClient.get("/api/health");
+    return response.data;
+  },
+
+  // ===========================
+  // Authentication
+  // ===========================
+
+  async register(userData) {
+    const response = await apiClient.post("/api/auth/register", userData);
+    return response.data;
+  },
+
+  async login(credentials) {
+    const response = await apiClient.post("/api/auth/login", credentials);
+    return response.data;
+  },
+
+  async logout(token) {
+    const response = await apiClient.post("/api/auth/logout", null, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+
+  async verifyToken(token) {
+    const response = await apiClient.get("/api/auth/verify", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+
+  async refreshToken(token) {
+    const response = await apiClient.post("/api/auth/refresh", null, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+
+  async getProfile(token) {
+    const response = await apiClient.get("/api/auth/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+
+  async updateProfile(updates, token) {
+    const response = await apiClient.put("/api/auth/me", updates, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     return response.data;
   },
 };

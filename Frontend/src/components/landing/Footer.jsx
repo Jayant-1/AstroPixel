@@ -88,7 +88,7 @@ const Footer = () => {
           {/* Copyright */}
           <div className="text-center">
             <p className="text-zinc-500 text-sm">
-              © {currentYear} AstroPixel. Built with 💜 by Jayant Potdar
+              © {currentYear} AstroPixel. Built by Jayant Potdar
             </p>
           </div>
         </div>

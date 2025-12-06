@@ -237,6 +237,100 @@ class CloudStorage:
         
         return None
 
+    def save_dataset_metadata(self, dataset_dict: dict) -> bool:
+        """
+        Save dataset metadata to R2 as JSON for persistence
+        
+        Args:
+            dataset_dict: Dataset data as dictionary
+            
+        Returns:
+            True if successful
+        """
+        if not self.enabled:
+            return False
+        
+        try:
+            import json
+            import tempfile
+            
+            dataset_id = dataset_dict.get('id')
+            if not dataset_id:
+                return False
+            
+            # Save individual dataset metadata
+            json_data = json.dumps(dataset_dict, default=str)
+            
+            self.client.put_object(
+                Bucket=self.bucket_name,
+                Key=f"metadata/datasets/{dataset_id}.json",
+                Body=json_data.encode('utf-8'),
+                ContentType='application/json'
+            )
+            
+            logger.info(f"✅ Saved metadata for dataset {dataset_id} to R2")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to save dataset metadata: {e}")
+            return False
+    
+    def load_all_datasets_metadata(self) -> list:
+        """
+        Load all dataset metadata from R2
+        
+        Returns:
+            List of dataset dictionaries
+        """
+        if not self.enabled:
+            return []
+        
+        try:
+            import json
+            
+            datasets = []
+            prefix = "metadata/datasets/"
+            
+            paginator = self.client.get_paginator('list_objects_v2')
+            
+            for page in paginator.paginate(Bucket=self.bucket_name, Prefix=prefix):
+                if 'Contents' not in page:
+                    continue
+                
+                for obj in page['Contents']:
+                    try:
+                        response = self.client.get_object(
+                            Bucket=self.bucket_name,
+                            Key=obj['Key']
+                        )
+                        data = json.loads(response['Body'].read().decode('utf-8'))
+                        datasets.append(data)
+                    except Exception as e:
+                        logger.error(f"Failed to load {obj['Key']}: {e}")
+            
+            logger.info(f"✅ Loaded {len(datasets)} datasets from R2 metadata")
+            return datasets
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to load datasets metadata: {e}")
+            return []
+    
+    def delete_dataset_metadata(self, dataset_id: int) -> bool:
+        """Delete dataset metadata from R2"""
+        if not self.enabled:
+            return False
+        
+        try:
+            self.client.delete_object(
+                Bucket=self.bucket_name,
+                Key=f"metadata/datasets/{dataset_id}.json"
+            )
+            logger.info(f"✅ Deleted metadata for dataset {dataset_id}")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Failed to delete dataset metadata: {e}")
+            return False
+
 
 # Global instance
 cloud_storage = CloudStorage()

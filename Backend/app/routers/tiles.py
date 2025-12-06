@@ -7,11 +7,13 @@ from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from pathlib import Path
 import logging
+from typing import Optional
 
 from app.database import get_db
-from app.models import Dataset
+from app.models import Dataset, User
 from app.config import settings
 from app.services.storage import cloud_storage
+from app.services.auth import get_current_user
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -25,9 +27,14 @@ async def get_tile(
     y: int = PathParam(..., ge=0, description="Tile Y coordinate"),
     format: str = PathParam(..., pattern="^(jpg|png|webp)$", description="Tile format"),
     db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
 ):
     """
     Serve individual tiles for a dataset
+    
+    Access control:
+    - Demo datasets: Anyone can access
+    - User datasets: Only the owner can access
 
     - **dataset_id**: ID of the dataset
     - **z**: Zoom level (0 = furthest out)
@@ -40,6 +47,13 @@ async def get_tile(
 
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    # Check permissions: demo datasets are public, user datasets require ownership
+    if not dataset.is_demo:
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required to access this dataset")
+        if dataset.owner_id != current_user.id:
+            raise HTTPException(status_code=403, detail="You don't have permission to access this dataset")
 
     # Allow serving tiles if completed OR if tiles exist locally (processing might be stuck)
     if dataset.processing_status not in ["completed", "processing"]:

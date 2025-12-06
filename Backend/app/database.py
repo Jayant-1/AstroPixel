@@ -47,9 +47,84 @@ def init_db() -> None:
     try:
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables created successfully")
+        
+        # Sync datasets from R2 cloud storage if enabled
+        sync_datasets_from_cloud()
+        
     except Exception as e:
         logger.error(f"Error creating database tables: {e}")
         raise
+
+
+def sync_datasets_from_cloud() -> None:
+    """
+    Sync dataset metadata from R2 cloud storage to local SQLite database.
+    This ensures datasets persist across backend restarts on HF Spaces.
+    """
+    try:
+        # Import here to avoid circular imports
+        from app.services.storage import cloud_storage
+        from app.models import Dataset
+        
+        if not cloud_storage.enabled:
+            logger.info("Cloud storage not enabled, skipping R2 sync")
+            return
+        
+        # Load datasets from R2
+        cloud_datasets = cloud_storage.load_all_datasets_metadata()
+        
+        if not cloud_datasets:
+            logger.info("No datasets found in R2 metadata")
+            return
+        
+        # Sync to local database
+        db = SessionLocal()
+        try:
+            synced = 0
+            for ds_data in cloud_datasets:
+                # Check if dataset already exists in local DB
+                existing = db.query(Dataset).filter(Dataset.id == ds_data.get('id')).first()
+                
+                if not existing:
+                    # Create new dataset from R2 metadata
+                    # NOTE: We treat all R2-synced datasets as DEMO datasets per production requirements
+                    # Only demo datasets are saved to R2 metadata in the first place
+                    
+                    # Handle both old and new schema field names
+                    original_file_path = ds_data.get('original_file_path') or ds_data.get('original_filename') or 'unknown'
+                    tile_base_path = ds_data.get('tile_base_path') or ds_data.get('file_path') or f"tiles/{ds_data.get('id')}"
+                    
+                    dataset = Dataset(
+                        id=ds_data.get('id'),
+                        name=ds_data.get('name'),
+                        description=ds_data.get('description'),
+                        category=ds_data.get('category', 'space'),
+                        original_file_path=original_file_path,
+                        tile_base_path=tile_base_path,
+                        width=ds_data.get('width', 0),
+                        height=ds_data.get('height', 0),
+                        tile_size=ds_data.get('tile_size', 256),
+                        min_zoom=ds_data.get('min_zoom', 0),
+                        max_zoom=ds_data.get('max_zoom', 0),
+                        processing_status=ds_data.get('processing_status', 'completed'),
+                        extra_metadata=ds_data.get('extra_metadata', {}),
+                        is_demo=True,  # Mark synced datasets from R2 as demo
+                        owner_id=None,  # Demo datasets have no owner
+                        expires_at=None,  # Demo datasets never expire
+                    )
+                    db.add(dataset)
+                    synced += 1
+                    logger.info(f"✅ Synced dataset from R2: {ds_data.get('name')} (ID: {ds_data.get('id')})")
+            
+            db.commit()
+            logger.info(f"✅ Synced {synced} datasets from R2 to local database")
+            
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"❌ Failed to sync datasets from R2: {e}")
+        # Don't raise - this is a best-effort sync
 
 
 def create_spatial_indexes() -> None:

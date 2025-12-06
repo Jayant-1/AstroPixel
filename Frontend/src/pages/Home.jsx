@@ -4,23 +4,28 @@ import {
   Grid,
   Layers,
   List,
+  LogOut,
   Moon,
   Search,
   Sparkles,
   Telescope,
   Trash2,
+  User,
 } from "lucide-react";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import FileUploader from "../components/common/FileUploader";
+import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import ProcessingStatusBadge from "../components/ui/ProcessingStatusBadge";
 import { useApp } from "../context/AppContext";
+import { useAuth } from "../context/AuthContext";
 import api, { API_BASE_URL } from "../services/api";
 import { cn, formatNumber, getCategoryColor } from "../utils/helpers";
 
 const Home = () => {
   const navigate = useNavigate();
+  const { isAuthenticated, user, logout } = useAuth();
   const {
     datasets,
     loading,
@@ -75,6 +80,51 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-gray-950">
+      {/* Top Navigation Bar */}
+      <nav className="bg-gray-900 border-b border-gray-800 px-6 py-3">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 via-purple-600 to-pink-500 rounded-xl flex items-center justify-center">
+              <Telescope className="w-5 h-5" />
+            </div>
+            <span className="text-xl font-bold">AstroPixel</span>
+          </Link>
+
+          <div className="flex items-center gap-4">
+            {isAuthenticated ? (
+              <>
+                <div className="flex items-center gap-2 text-gray-300">
+                  <User className="w-4 h-4" />
+                  <span className="text-sm">
+                    {user?.username || user?.email}
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={logout}
+                  className="gap-2 text-gray-400 hover:text-white"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Logout
+                </Button>
+              </>
+            ) : (
+              <>
+                <Link to="/login">
+                  <Button variant="ghost" size="sm">
+                    Sign in
+                  </Button>
+                </Link>
+                <Link to="/signup">
+                  <Button size="sm">Get Started</Button>
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+      </nav>
+
       {/* Hero Section */}
       <section className="relative bg-gradient-to-br from-gray-900 via-blue-900/20 to-purple-900/20 border-b border-gray-800">
         <div className="max-w-7xl mx-auto px-6 py-16">
@@ -263,15 +313,17 @@ const DatasetCard = ({ dataset, onClick }) => {
 
   return (
     <div className="group relative text-left bg-gray-900 border-2 border-gray-800 rounded-xl overflow-hidden hover:border-gray-700 transition-all hover:scale-[1.02]">
-      {/* Delete Button */}
-      <button
-        onClick={handleDelete}
-        disabled={deleting}
-        className="absolute top-3 right-3 z-10 p-2 bg-red-500/90 hover:bg-red-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
-        title="Delete dataset"
-      >
-        <Trash2 className="w-4 h-4 text-white" />
-      </button>
+      {/* Delete Button (only for non-demo datasets) */}
+      {!dataset.is_demo && (
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          className="absolute top-3 right-3 z-10 p-2 bg-red-500/90 hover:bg-red-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+          title="Delete dataset"
+        >
+          <Trash2 className="w-4 h-4 text-white" />
+        </button>
+      )}
 
       <button
         onClick={onClick}
@@ -302,9 +354,16 @@ const DatasetCard = ({ dataset, onClick }) => {
         {/* Content */}
         <div className="p-5">
           <div className="flex items-start justify-between gap-2 mb-2">
-            <h3 className="font-semibold text-lg line-clamp-1 flex-1">
-              {dataset.name}
-            </h3>
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <h3 className="font-semibold text-lg line-clamp-1">
+                {dataset.name}
+              </h3>
+              {dataset.is_demo && (
+                <span className="px-2 py-0.5 text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded">
+                  DEMO
+                </span>
+              )}
+            </div>
             {dataset.processing_status && (
               <ProcessingStatusBadge
                 status={dataset.processing_status}
@@ -315,6 +374,15 @@ const DatasetCard = ({ dataset, onClick }) => {
           <p className="text-sm text-gray-400 mb-4 line-clamp-2">
             {dataset.description || "High-resolution imagery dataset"}
           </p>
+
+          {/* Expiry Warning (only show if time_until_expiry is present) */}
+          {dataset.time_until_expiry && !dataset.is_demo && (
+            <div className="mb-3 px-3 py-2 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+              <p className="text-xs text-yellow-500 font-medium">
+                ⚠️ Expires in {dataset.time_until_expiry}
+              </p>
+            </div>
+          )}
 
           <div className="flex items-center justify-between text-xs text-gray-500">
             <span>

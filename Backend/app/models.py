@@ -19,6 +19,37 @@ from datetime import datetime
 from app.database import Base
 
 
+class User(Base):
+    """User model for authentication"""
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    username = Column(String(100), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    full_name = Column(String(255))
+    
+    # User status
+    is_active = Column(Boolean, default=True)
+    is_superuser = Column(Boolean, default=False)
+    
+    # Profile
+    avatar_url = Column(String(500))
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    last_login = Column(DateTime)
+
+    # Relationships
+    datasets = relationship("Dataset", back_populates="owner", cascade="all, delete-orphan")
+    annotations = relationship("Annotation", back_populates="user", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<User(id={self.id}, email='{self.email}', username='{self.username}')>"
+
+
 class Dataset(Base):
     """Dataset model representing a NASA gigapixel image"""
 
@@ -28,6 +59,9 @@ class Dataset(Base):
     name = Column(String(255), unique=True, index=True, nullable=False)
     description = Column(Text)
     category = Column(String(50), index=True)  # earth, mars, space
+    
+    # Owner
+    owner_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True)
 
     # File paths
     original_file_path = Column(Text, nullable=False)
@@ -59,6 +93,10 @@ class Dataset(Base):
     )  # pending, processing, completed, failed
     processing_progress = Column(Integer, default=0)  # 0-100 percentage
 
+    # Visibility and lifecycle management
+    is_demo = Column(Boolean, default=False, nullable=False, index=True)  # Demo datasets for guest users
+    expires_at = Column(DateTime, nullable=True, index=True)  # Auto-delete timestamp (NULL for demo datasets)
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(
@@ -66,6 +104,7 @@ class Dataset(Base):
     )
 
     # Relationships
+    owner = relationship("User", back_populates="datasets")
     annotations = relationship(
         "Annotation", back_populates="dataset", cascade="all, delete-orphan"
     )
@@ -88,7 +127,7 @@ class Annotation(Base):
         index=True,
         nullable=False,
     )
-    user_id = Column(String(100), index=True, default="anonymous")
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True)
 
     # Geometry (PostGIS) - Disabled for SQLite
     # For PostgreSQL with PostGIS, uncomment:
@@ -110,6 +149,7 @@ class Annotation(Base):
 
     # Relationships
     dataset = relationship("Dataset", back_populates="annotations")
+    user = relationship("User", back_populates="annotations")
 
     def __repr__(self):
         return f"<Annotation(id={self.id}, dataset_id={self.dataset_id}, label='{self.label}')>"
