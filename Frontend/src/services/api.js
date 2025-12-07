@@ -36,11 +36,17 @@ apiClient.interceptors.response.use(
 
       switch (status) {
         case 401:
-          // Handle unauthorized
-          console.error("Unauthorized access");
-          break;
         case 403:
-          console.error("Forbidden access");
+          // Handle unauthorized/forbidden - clear auth and redirect to login
+          console.error("Authentication required - redirecting to login");
+          localStorage.removeItem("astropixel_token");
+          localStorage.removeItem("astropixel_user");
+          
+          // Only redirect if not already on login/signup page
+          const currentPath = window.location.pathname;
+          if (!currentPath.includes('/login') && !currentPath.includes('/signup')) {
+            window.location.href = '/login?redirect=' + encodeURIComponent(currentPath);
+          }
           break;
         case 404:
           console.error("Resource not found");

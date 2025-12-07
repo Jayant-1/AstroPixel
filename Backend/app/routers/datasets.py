@@ -119,6 +119,15 @@ async def init_chunked_upload(
             detail=f"Unsupported file format. Supported: .tif, .tiff, .psb, .psd"
         )
     
+    # Enforce file size limit
+    if filesize > settings.MAX_UPLOAD_SIZE:
+        max_gb = settings.MAX_UPLOAD_SIZE / (1024**3)
+        size_gb = filesize / (1024**3)
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size: {max_gb:.1f}GB (you requested {size_gb:.1f}GB)",
+        )
+
     # Generate unique upload ID
     upload_id = str(uuid.uuid4())
     
@@ -161,6 +170,11 @@ async def upload_chunk(
     # Save chunk to temp directory
     chunk_path = session["temp_dir"] / f"chunk_{chunk_index:06d}"
     
+    # Enforce per-chunk size limit (optional, e.g. 2GB)
+    MAX_CHUNK_SIZE = 2 * 1024 * 1024 * 1024  # 2GB
+    if chunk.size and chunk.size > MAX_CHUNK_SIZE:
+        raise HTTPException(status_code=413, detail=f"Chunk too large. Maximum chunk size: 2GB.")
+
     try:
         async with aiofiles.open(chunk_path, "wb") as f:
             content = await chunk.read()
