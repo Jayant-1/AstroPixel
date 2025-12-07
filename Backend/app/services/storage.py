@@ -208,7 +208,15 @@ class CloudStorage:
         
         return uploaded
     
-    def get_tile_url(self, dataset_id: int, z: int, x: int, y: int, format: str = 'jpg') -> Optional[str]:
+    def get_tile_url(
+        self,
+        dataset_id: int,
+        z: int,
+        x: int,
+        y: int,
+        format: str = 'jpg',
+        version: Optional[str] = None,
+    ) -> Optional[str]:
         """
         Get public URL for a tile
         
@@ -223,7 +231,11 @@ class CloudStorage:
         if not self.enabled or not self.public_url:
             return None
         
-        return f"{self.public_url}/tiles/{dataset_id}/{z}/{x}/{y}.{format}"
+        url = f"{self.public_url}/tiles/{dataset_id}/{z}/{x}/{y}.{format}"
+        if version:
+            separator = "&" if "?" in url else "?"
+            url = f"{url}{separator}v={version}"
+        return url
     
     def tile_exists(self, dataset_id: int, z: int, x: int, y: int, format: str = 'jpg') -> bool:
         """Check if a tile exists in cloud storage"""
@@ -274,7 +286,12 @@ class CloudStorage:
             logger.error(f"Failed to delete tiles for dataset {dataset_id}: {e}")
             return 0
     
-    def upload_preview(self, local_path: Path, dataset_id: int) -> Optional[str]:
+    def upload_preview(
+        self,
+        local_path: Path,
+        dataset_id: int,
+        version: Optional[str] = None,
+    ) -> Optional[str]:
         """
         Upload dataset preview image
         
@@ -295,6 +312,8 @@ class CloudStorage:
         if self.upload_file(local_path, remote_key, 'image/jpeg'):
             if self.public_url:
                 preview_url = f"{self.public_url}/{remote_key}"
+                if version:
+                    preview_url = f"{preview_url}?v={version}"
                 logger.info(f"✅ Preview uploaded: {preview_url}")
                 return preview_url
         

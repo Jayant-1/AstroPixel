@@ -106,8 +106,13 @@ const ViewerCanvas = ({
           getTileUrl: function (level, x, y) {
             // Use png format to match tiles stored in R2
             const token = localStorage.getItem("astropixel_token");
-            const url = `${API_BASE_URL}/api/tiles/${dataset.id}/${level}/${x}/${y}.png`;
-            return token ? `${url}?token=${token}` : url;
+            const version = dataset.updated_at
+              ? new Date(dataset.updated_at).getTime()
+              : dataset.created_at
+              ? new Date(dataset.created_at).getTime()
+              : Date.now();
+            const base = `${API_BASE_URL}/api/tiles/${dataset.id}/${level}/${x}/${y}.png?v=${version}`;
+            return token ? `${base}&token=${token}` : base;
           },
         },
 

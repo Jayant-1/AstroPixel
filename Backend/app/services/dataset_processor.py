@@ -287,7 +287,12 @@ class DatasetProcessor:
                         
                         # Upload preview
                         if preview_path.exists():
-                            preview_url = cloud_storage.upload_preview(preview_path, dataset_id)
+                            version_token = str(int(time.time()))
+                            preview_url = cloud_storage.upload_preview(
+                                preview_path,
+                                dataset_id,
+                                version=version_token,
+                            )
                             if preview_url:
                                 dataset.extra_metadata['preview_url'] = preview_url
                                 logger.info(f"✅ Uploaded preview to: {preview_url}")

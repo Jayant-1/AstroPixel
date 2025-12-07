@@ -28,6 +28,18 @@ const FileUploader = ({ onUpload }) => {
   const [statusMessage, setStatusMessage] = useState("");
   const [processingStatus, setProcessingStatus] = useState(null); // null, 'uploading', 'processing', 'completed', 'failed'
 
+  const isLoading =
+    processingStatus &&
+    processingStatus !== "completed" &&
+    processingStatus !== "failed";
+  const activeProgress =
+    processingStatus === "uploading"
+      ? uploadProgress
+      : processingStatus === "processing"
+      ? processingProgress
+      : 0;
+  const displayProgress = activeProgress || (isLoading ? 6 : 0);
+
   const handleFileSelect = (e) => {
     const selectedFile = e.target.files[0];
     if (!selectedFile) return;
@@ -69,7 +81,7 @@ const FileUploader = ({ onUpload }) => {
     setUploadProgress(0);
     setProcessingProgress(0);
     setProcessingStatus("uploading");
-    setStatusMessage("Uploading file...");
+    setStatusMessage("Uploading file to R2...");
 
     try {
       // Upload file with progress tracking
@@ -83,13 +95,13 @@ const FileUploader = ({ onUpload }) => {
             (progressEvent.loaded * 100) / progressEvent.total
           );
           setUploadProgress(percentCompleted);
-          setStatusMessage(`Uploading file... ${percentCompleted}%`);
+          setStatusMessage(`Uploading file to R2... ${percentCompleted}%`);
         }
       );
 
       setUploadProgress(100);
       setProcessingStatus("processing");
-      setStatusMessage("Processing tiles...");
+      setStatusMessage("Processing tiles and uploading to R2...");
 
       // Poll for processing status with progress updates (no timeout - waits until done)
       const dataset = await api.pollProcessingStatus(
@@ -104,9 +116,13 @@ const FileUploader = ({ onUpload }) => {
               ? `${elapsedMinutes}m ${elapsedSeconds}s`
               : `${elapsedSeconds}s`;
           if (progress > 0) {
-            setStatusMessage(`Processing tiles... ${progress}% (${timeStr})`);
+            setStatusMessage(
+              `Processing tiles and uploading to R2... ${progress}% (${timeStr})`
+            );
           } else {
-            setStatusMessage(`Processing tiles... (${timeStr})`);
+            setStatusMessage(
+              `Processing tiles and uploading to R2... (${timeStr})`
+            );
           }
         }
       );
@@ -115,7 +131,7 @@ const FileUploader = ({ onUpload }) => {
       setSuccess(true);
       setProcessingProgress(100);
       setProcessingStatus("completed");
-      setStatusMessage("Upload complete! Tiles are ready.");
+      setStatusMessage("Upload complete! Tiles are ready from R2.");
 
       if (onUpload) onUpload(dataset);
 
@@ -156,6 +172,14 @@ const FileUploader = ({ onUpload }) => {
 
   return (
     <div className="w-full p-6 border-2 border-dashed border-gray-700 rounded-lg bg-gray-800/50 hover:border-blue-500/50 transition-colors">
+      {isLoading && (
+        <div className="w-full h-2 mb-4 bg-gray-700/80 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-fuchsia-500 transition-all duration-500 ease-out"
+            style={{ width: `${displayProgress}%` }}
+          />
+        </div>
+      )}
       {!file ? (
         // File selection
         <label className="flex flex-col items-center gap-3 cursor-pointer">
@@ -262,12 +286,12 @@ const FileUploader = ({ onUpload }) => {
               {processingStatus === "uploading" && uploadProgress > 0 && (
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs text-gray-400">
-                    <span>Uploading</span>
+                    <span>Uploading to R2</span>
                     <span>{uploadProgress}%</span>
                   </div>
                   <div className="w-full bg-gray-700 rounded-full h-2.5 overflow-hidden">
                     <div
-                      className="bg-gradient-to-r from-blue-500 to-cyan-500 h-full transition-all duration-300 ease-out"
+                      className="bg-gradient-to-r from-purple-500 via-pink-500 to-fuchsia-500 h-full transition-all duration-300 ease-out"
                       style={{ width: `${uploadProgress}%` }}
                     />
                   </div>

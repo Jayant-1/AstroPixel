@@ -306,10 +306,18 @@ const DatasetCard = ({ dataset, onClick }) => {
 
   // Preview image URL from dataset metadata (stored in R2)
   // Falls back to constructed URL for legacy datasets
+  const cacheBust = dataset.updated_at
+    ? new Date(dataset.updated_at).getTime()
+    : dataset.created_at
+    ? new Date(dataset.created_at).getTime()
+    : Date.now();
+
   const previewUrl = dataset.extra_metadata?.preview_url
-    ? dataset.extra_metadata.preview_url
+    ? `${dataset.extra_metadata.preview_url}${
+        dataset.extra_metadata.preview_url.includes("?") ? "&" : "?"
+      }v=${cacheBust}`
     : dataset.id
-    ? `${API_BASE_URL}/datasets/${dataset.id}_preview.jpg`
+    ? `${API_BASE_URL}/api/tiles/${dataset.id}/preview?v=${cacheBust}`
     : null;
 
   const [imgError, setImgError] = useState(false);

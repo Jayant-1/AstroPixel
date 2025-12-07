@@ -61,11 +61,18 @@ async def get_tile(
             status_code=503, detail=f"Dataset is {dataset.processing_status}"
         )
 
+    # Cache-busting token to avoid stale tiles when dataset IDs get reused
+    cache_bust = None
+    if dataset.updated_at:
+        cache_bust = str(int(dataset.updated_at.timestamp()))
+    elif dataset.created_at:
+        cache_bust = str(int(dataset.created_at.timestamp()))
+
     # If cloud storage (R2) is enabled, always try R2 first for better performance
     # This works for both new datasets (with metadata flag) and old datasets
     if cloud_storage.enabled and cloud_storage.public_url:
         # Generate R2 public URL and redirect
-        tile_url = cloud_storage.get_tile_url(dataset_id, z, x, y, format)
+        tile_url = cloud_storage.get_tile_url(dataset_id, z, x, y, format, cache_bust)
         if tile_url:
             logger.debug(f"Redirecting to R2: {tile_url}")
             return RedirectResponse(
@@ -152,16 +159,28 @@ async def get_preview(dataset_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Dataset not found")
 
     # Check if preview is stored in cloud storage (R2)
+    cache_bust = None
+    if dataset.updated_at:
+        cache_bust = str(int(dataset.updated_at.timestamp()))
+    elif dataset.created_at:
+        cache_bust = str(int(dataset.created_at.timestamp()))
+
     if cloud_storage.enabled and cloud_storage.public_url:
         # Check if dataset has preview_url in metadata
         if dataset.extra_metadata and dataset.extra_metadata.get('preview_url'):
+            preview_url = dataset.extra_metadata['preview_url']
+            if cache_bust:
+                separator = '&' if '?' in preview_url else '?'
+                preview_url = f"{preview_url}{separator}v={cache_bust}"
             return RedirectResponse(
-                url=dataset.extra_metadata['preview_url'],
+                url=preview_url,
                 status_code=302,
                 headers={"Cache-Control": "public, max-age=86400"}
             )
         # Fallback to constructing R2 URL
         preview_url = f"{cloud_storage.public_url}/previews/{dataset_id}_preview.jpg"
+        if cache_bust:
+            preview_url = f"{preview_url}?v={cache_bust}"
         return RedirectResponse(
             url=preview_url,
             status_code=302,

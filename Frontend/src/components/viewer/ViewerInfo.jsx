@@ -9,6 +9,12 @@ import {
 const ViewerInfo = ({ dataset }) => {
   const colors = getCategoryColor(dataset.category);
 
+  const cacheBust = dataset.updated_at
+    ? new Date(dataset.updated_at).getTime()
+    : dataset.created_at
+    ? new Date(dataset.created_at).getTime()
+    : Date.now();
+
   const infoItems = [
     {
       icon: Ruler,
@@ -45,8 +51,13 @@ const ViewerInfo = ({ dataset }) => {
           {dataset.id ? (
             <img
               src={
-                dataset.extra_metadata?.preview_url ||
-                `${API_BASE_URL}/datasets/${dataset.id}_preview.jpg`
+                dataset.extra_metadata?.preview_url
+                  ? `${dataset.extra_metadata.preview_url}${
+                      dataset.extra_metadata.preview_url.includes("?")
+                        ? "&"
+                        : "?"
+                    }v=${cacheBust}`
+                  : `${API_BASE_URL}/api/tiles/${dataset.id}/preview?v=${cacheBust}`
               }
               alt={`${dataset.name} preview`}
               className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-300"
