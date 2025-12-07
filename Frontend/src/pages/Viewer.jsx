@@ -2,7 +2,6 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
-  Download,
   Eye,
   GitCompare,
   Maximize2,
@@ -16,7 +15,6 @@ import AnnotationTools from "../components/viewer/AnnotationTools";
 import AnnotationsList from "../components/viewer/AnnotationsList";
 import ComparisonControls from "../components/viewer/ComparisonControls";
 import ComparisonView from "../components/viewer/ComparisonView";
-import ExportModal from "../components/viewer/ExportModal";
 import SettingsModal from "../components/viewer/SettingsModal";
 import ViewerCanvas from "../components/viewer/ViewerCanvas";
 import ViewerInfo from "../components/viewer/ViewerInfo";
@@ -44,7 +42,6 @@ const Viewer = () => {
     zoom: "1.0",
     position: { x: 0, y: 0 },
   });
-  const [showExportModal, setShowExportModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   // Comparison view state - shared between sidebar and main canvas
@@ -250,13 +247,6 @@ const Viewer = () => {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setShowExportModal(true)}
-            >
-              <Download className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
               onClick={() => setShowSettingsModal(true)}
             >
               <Settings className="w-4 h-4" />
@@ -411,12 +401,6 @@ const Viewer = () => {
       </footer>
 
       {/* Modals */}
-      <ExportModal
-        isOpen={showExportModal}
-        onClose={() => setShowExportModal(false)}
-        dataset={selectedDataset}
-        viewerRef={viewerRef}
-      />
       <SettingsModal
         isOpen={showSettingsModal}
         onClose={() => setShowSettingsModal(false)}
