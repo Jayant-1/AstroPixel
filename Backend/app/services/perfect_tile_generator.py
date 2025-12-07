@@ -23,7 +23,17 @@ Image.register_extension(PsdImagePlugin.PsdImageFile.format, ".psb")
 from typing import Callable, Optional
 import gc
 import psutil
-import numpy as np
+
+# Safe numpy import with fallback
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except (ImportError, ValueError) as e:
+    # ValueError: "you should not try to import numpy from its source directory"
+    # This happens on some systems - we can work without numpy for PIL operations
+    HAS_NUMPY = False
+    np = None
+
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import multiprocessing
 import threading
@@ -104,6 +114,9 @@ class PerfectTileGenerator:
     """
 
     def __init__(self, input_file: Path, output_dir: Path, tile_size: int = 256):
+        if not HAS_NUMPY:
+            raise ImportError("NumPy is required for PerfectTileGenerator but could not be imported")
+        
         self.input_file = input_file
         self.output_dir = output_dir
         self.tile_size = tile_size

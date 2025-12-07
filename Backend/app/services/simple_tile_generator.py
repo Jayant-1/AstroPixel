@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 # Aggressive memory management thresholds
 MEMORY_SAFE_THRESHOLD = 50_000_000  # 50 MP - use standard processing
 CHUNK_SIZE = 4096  # Process image in 4096x4096 pixel chunks
-MAX_MEMORY_PERCENT = 70  # Stop if RAM usage exceeds 70%
+MAX_MEMORY_PERCENT = 60  # Stop if RAM usage exceeds 60% to be safe
 
 # Try to use GPU acceleration if available
 try:
@@ -208,9 +208,17 @@ class SimpleTileGenerator:
 
             total_levels = max_zoom - start_zoom + 1
             for zoom_idx, zoom in enumerate(range(start_zoom, max_zoom + 1)):
+                # Force garbage collection before each zoom level
+                gc.collect()
+                
                 # Check memory before starting new zoom level
                 memory = psutil.virtual_memory()
-                if memory.percent > 85:
+                if memory.percent > 75:
+                    logger.warning(f"⚠️ High memory usage: {memory.percent}% - running gc.collect()")
+                    gc.collect()
+                    memory = psutil.virtual_memory()
+                
+                if memory.percent > 80:
                     logger.error(
                         f"❌ Memory critical: {memory.percent}% - aborting to prevent crash"
                     )
