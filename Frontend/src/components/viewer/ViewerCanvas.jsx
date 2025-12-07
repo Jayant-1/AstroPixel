@@ -3,8 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { API_BASE_URL } from "../../services/api";
 
-const ViewerCanvas = ({ dataset, onReady, mode }) => {
-  const viewerRef = useRef(null);
+const ViewerCanvas = ({ dataset, onReady, mode, viewerRef: externalViewerRef }) => {
+  const internalViewerRef = useRef(null);
+  const viewerRef = externalViewerRef || internalViewerRef;
   const containerRef = useRef(null);
   const onReadyRef = useRef(onReady);
   const [viewer, setViewer] = useState(null);

@@ -9,7 +9,7 @@ import {
   Settings,
   Tag,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Button from "../components/ui/Button";
 import AnnotationTools from "../components/viewer/AnnotationTools";
@@ -26,6 +26,7 @@ import { cn } from "../utils/helpers";
 const Viewer = () => {
   const { datasetId } = useParams();
   const navigate = useNavigate();
+  const viewerRef = useRef(null);
   const {
     datasets,
     selectedDataset,
@@ -340,6 +341,7 @@ const Viewer = () => {
               dataset={selectedDataset}
               mode={viewMode}
               onReady={() => setViewerReady(true)}
+              viewerRef={viewerRef}
             />
           )}
         </div>
@@ -413,6 +415,7 @@ const Viewer = () => {
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
         dataset={selectedDataset}
+        viewerRef={viewerRef}
       />
       <SettingsModal
         isOpen={showSettingsModal}
