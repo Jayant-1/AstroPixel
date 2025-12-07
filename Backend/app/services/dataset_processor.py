@@ -457,7 +457,7 @@ class DatasetProcessor:
     @staticmethod
     def delete_dataset(dataset_id: int, db: Session) -> bool:
         """
-        Delete dataset and associated files
+        Delete dataset and associated files from local storage and R2
 
         Args:
             dataset_id: ID of dataset to delete
@@ -471,11 +471,28 @@ class DatasetProcessor:
             if not dataset:
                 raise ValueError(f"Dataset {dataset_id} not found")
 
-            # Delete tile directory
+            # Delete from R2 cloud storage if enabled
+            if cloud_storage.enabled:
+                logger.info(f"Deleting dataset {dataset_id} from R2...")
+                deleted_tiles = cloud_storage.delete_dataset_tiles(dataset_id)
+                logger.info(f"Deleted {deleted_tiles} tiles from R2 for dataset {dataset_id}")
+                
+                # Also delete preview from R2
+                try:
+                    preview_key = f"previews/{dataset_id}_preview.jpg"
+                    cloud_storage.client.delete_object(
+                        Bucket=cloud_storage.bucket_name,
+                        Key=preview_key
+                    )
+                    logger.info(f"Deleted preview from R2 for dataset {dataset_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete preview from R2: {e}")
+
+            # Delete tile directory (local)
             tile_dir = Path(dataset.tile_base_path)
             if tile_dir.exists():
                 shutil.rmtree(tile_dir)
-                logger.info(f"Deleted tiles for dataset {dataset_id}")
+                logger.info(f"Deleted local tiles for dataset {dataset_id}")
 
             # Delete original file
             original_file = Path(dataset.original_file_path)
@@ -492,11 +509,12 @@ class DatasetProcessor:
             db.delete(dataset)
             db.commit()
 
-            logger.info(f"Dataset {dataset_id} deleted successfully")
+            logger.info(f"✅ Dataset {dataset_id} deleted successfully (local + R2)")
             return True
 
         except Exception as e:
-            logger.error(f"Error deleting dataset {dataset_id}: {e}")
+            logger.error(f"❌ Error deleting dataset {dataset_id}: {e}")
+            db.rollback()
             return False
 
     @staticmethod

@@ -165,3 +165,40 @@ def get_time_until_expiry(expires_at: datetime) -> str:
         return f"{minutes} minute{'s' if minutes != 1 else ''}"
     else:
         return "Less than a minute"
+
+
+def reset_database_sequences(db: Session) -> bool:
+    """
+    Reset database sequences to prevent ID gaps after deletions.
+    
+    For PostgreSQL: Resets the dataset_id_seq sequence to MAX(id) + 1
+    For SQLite: No-op (SQLite handles this automatically with AUTOINCREMENT)
+    
+    Args:
+        db: Database session
+        
+    Returns:
+        True if successful
+    """
+    try:
+        # Get the maximum dataset ID
+        from sqlalchemy import func
+        max_id = db.query(func.max(Dataset.id)).scalar()
+        
+        if max_id is None:
+            max_id = 0
+        
+        # For PostgreSQL, reset the sequence
+        try:
+            db.execute(f"SELECT setval('datasets_id_seq', {max_id + 1})")
+            db.commit()
+            logger.info(f"✅ Reset database sequence to {max_id + 1}")
+            return True
+        except Exception as e:
+            # If sequence reset fails (SQLite, different schema), just log and continue
+            logger.debug(f"Could not reset sequence (expected on SQLite): {e}")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Error resetting database sequences: {e}")
+        return False

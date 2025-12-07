@@ -38,7 +38,7 @@ from app.schemas import (
 )
 from app.services.storage import cloud_storage
 from app.services.dataset_processor import DatasetProcessor
-from app.services.cleanup import get_time_until_expiry
+from app.services.cleanup import get_time_until_expiry, reset_database_sequences
 from app.services.auth import get_current_user, get_current_user_required
 from app.config import settings
 
@@ -599,6 +599,9 @@ async def delete_dataset(
         raise HTTPException(
             status_code=500, detail="Failed to delete dataset"
         )
+    
+    # Reset database sequences to prevent ID gaps after deletion
+    reset_database_sequences(db)
 
     return MessageResponse(message=f"Dataset {dataset_id} deleted successfully")
 
