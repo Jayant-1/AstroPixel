@@ -77,13 +77,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """
     
     # Rate limit configurations (requests, window_seconds)
+    # NOTE: Chunked uploads can send hundreds of requests; keep generous limits here.
     RATE_LIMITS = {
-        "/api/datasets/upload": (5, 3600),  # 5 uploads per hour
-        "/api/datasets/chunk/start": (5, 3600),
-        "/api/datasets/chunk/upload": (100, 3600),  # 100 chunks per hour
-        "/api/auth/register": (3, 900),  # 3 registrations per 15 minutes
-        "/api/auth/login": (10, 900),  # 10 login attempts per 15 minutes
-        "default": (100, 60),  # 100 requests per minute for all other endpoints
+        "/api/datasets/upload/chunk": (2000, 3600),  # allow ~2000 chunks per hour per IP
+        "/api/datasets/upload/init": (50, 3600),     # init calls are rare
+        "/api/datasets/upload": (20, 3600),          # metadata/finalize calls
+        "/api/auth/register": (3, 900),              # 3 registrations per 15 minutes
+        "/api/auth/login": (10, 900),                # 10 login attempts per 15 minutes
+        "default": (100, 60),                        # 100 requests per minute for all other endpoints
     }
     
     EXEMPT_PATHS = [
