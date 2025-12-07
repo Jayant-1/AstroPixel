@@ -1,6 +1,8 @@
-import { Check, UploadCloud, X } from "lucide-react";
+import { Check, UploadCloud, X, LogIn } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
 import Button from "../ui/Button";
 import Input from "../ui/Input";
 
@@ -8,8 +10,12 @@ import Input from "../ui/Input";
  * FileUploader component
  * Allows user to upload GeoTIFF files with metadata
  * The backend will process the file and generate tiles
+ * Requires user to be authenticated
  */
 const FileUploader = ({ onUpload }) => {
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  const [showSignInPopup, setShowSignInPopup] = useState(false);
   const [file, setFile] = useState(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -46,6 +52,12 @@ const FileUploader = ({ onUpload }) => {
   };
 
   const handleUpload = async () => {
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      setShowSignInPopup(true);
+      return;
+    }
+
     if (!file || !name || !category) {
       setError("Please provide a file, name, and category");
       return;
@@ -296,6 +308,43 @@ const FileUploader = ({ onUpload }) => {
               </Button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Sign In Required Popup */}
+      {showSignInPopup && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-gray-900 rounded-lg p-8 max-w-md w-full mx-4 border border-gray-700 shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                <LogIn className="w-6 h-6 text-blue-400" />
+              </div>
+              <h2 className="text-2xl font-bold text-white">Sign In Required</h2>
+            </div>
+
+            <p className="text-gray-300 mb-6">
+              You need to sign in to upload datasets. Create an account or sign in with your existing credentials.
+            </p>
+
+            <div className="flex gap-3">
+              <Button
+                onClick={() => {
+                  setShowSignInPopup(false);
+                  navigate("/login");
+                }}
+                className="flex-1"
+              >
+                Sign In
+              </Button>
+              <Button
+                onClick={() => setShowSignInPopup(false)}
+                variant="outline"
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
