@@ -65,11 +65,6 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
       const tilesX = Math.ceil(dataset.width / tileSize);
       const tilesY = Math.ceil(dataset.height / tileSize);
 
-      // Get viewport bounds to determine which tiles to fetch
-      const viewportBounds = viewport.getBounds(true);
-      const tiledImage = viewer.world.getItemAt(0);
-      const imageBounds = tiledImage.viewportToImageRectangle(viewportBounds);
-
       const startX = Math.max(0, Math.floor(imageBounds.x / tileSize));
       const startY = Math.max(0, Math.floor(imageBounds.y / tileSize));
       const endX = Math.min(
@@ -94,17 +89,37 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
           const tilePromise = (async () => {
             try {
               const tileUrl = `${window.location.origin}/api/tiles/${dataset.id}/${currentLevel}/${x}/${y}.png`;
+              console.log(`Fetching tile: ${tileUrl}`);
 
               const response = await fetch(tileUrl, { credentials: "include" });
+              console.log(
+                `Tile ${x},${y} response:`,
+                response.status,
+                response.headers.get("content-type")
+              );
+
               if (!response.ok) {
-                console.debug(
+                console.warn(
                   `Tile ${currentLevel}/${x}/${y} not available (status ${response.status})`
                 );
                 return;
               }
 
               const blob = await response.blob();
+              console.log(
+                `Tile ${x},${y} blob size:`,
+                blob.size,
+                "type:",
+                blob.type
+              );
+
+              if (blob.size === 0) {
+                console.warn(`Tile ${currentLevel}/${x}/${y} is empty`);
+                return;
+              }
+
               const img = await createImageBitmap(blob);
+              console.log(`Tile ${x},${y} bitmap:`, img.width, "x", img.height);
 
               // Calculate position on canvas
               const canvasX = (x * tileSize - imageBounds.x) * scaleFactor;
@@ -140,6 +155,15 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
       // Wait for all tiles to load
       await Promise.all(tilePromises);
 
+      // Check if any tiles were loaded
+      if (loadedTiles === 0) {
+        throw new Error(
+          `No tiles could be loaded. Please ensure tiles are available for dataset ${dataset.id} at level ${currentLevel}. ` +
+            `Tried loading ${totalTiles} tiles from (${startX},${startY}) to (${endX},${endY}).`
+        );
+      }
+
+      console.log(`Successfully loaded ${loadedTiles}/${totalTiles} tiles`);
       setExportProgress("Generating image...");
 
       // Convert to blob based on format
@@ -246,8 +270,15 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
           const tilePromise = (async () => {
             try {
               const tileUrl = `${window.location.origin}/api/tiles/${dataset.id}/${optimalLevel}/${x}/${y}.png`;
+              console.log(`[Full Export] Fetching tile: ${tileUrl}`);
 
               const response = await fetch(tileUrl, { credentials: "include" });
+              console.log(
+                `[Full Export] Tile ${optimalLevel}/${x}/${y} response status: ${
+                  response.status
+                }, content-type: ${response.headers.get("content-type")}`
+              );
+
               if (!response.ok) {
                 console.debug(
                   `Tile ${optimalLevel}/${x}/${y} not found (status ${response.status})`
@@ -256,12 +287,19 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
               }
 
               const blob = await response.blob();
+              console.log(
+                `[Full Export] Tile ${optimalLevel}/${x}/${y} blob size: ${blob.size}, type: ${blob.type}`
+              );
+
               if (blob.size === 0) {
                 console.debug(`Tile ${optimalLevel}/${x}/${y} is empty`);
                 return;
               }
 
               const img = await createImageBitmap(blob);
+              console.log(
+                `[Full Export] Tile ${optimalLevel}/${x}/${y} bitmap created: ${img.width}x${img.height}`
+              );
 
               // Calculate position on canvas
               const canvasX = x * tileSize * scaleFactor;
@@ -296,6 +334,18 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
 
       // Wait for all tiles
       await Promise.all(tilePromises);
+
+      console.log(
+        `[Full Export] Loaded ${loadedTiles}/${totalTiles} tiles successfully`
+      );
+
+      if (loadedTiles === 0) {
+        throw new Error(
+          `No tiles loaded for dataset ${dataset.id} at level ${optimalLevel}. ` +
+            `Attempted to load ${totalTiles} tiles (${tilesX}x${tilesY}). ` +
+            `Check browser console for tile fetch errors.`
+        );
+      }
 
       setExportProgress("Generating image file...");
 

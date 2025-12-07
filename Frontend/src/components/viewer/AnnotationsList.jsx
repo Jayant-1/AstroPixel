@@ -138,16 +138,6 @@ const AnnotationsList = () => {
             <option value="Rectangle">Rectangles</option>
             <option value="Circle">Circles</option>
           </select>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleExport}
-            disabled={annotations.length === 0}
-            title="Export annotations"
-          >
-            <Download className="w-4 h-4" />
-          </Button>
         </div>
       </div>
 
