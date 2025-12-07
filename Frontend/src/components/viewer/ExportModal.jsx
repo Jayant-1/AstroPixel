@@ -52,28 +52,41 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
       exportCanvas.height = height;
       const ctx = exportCanvas.getContext("2d");
 
-      // Fill with background color
-      ctx.fillStyle = "#000000";
+      // Set white background instead of black
+      ctx.fillStyle = "#FFFFFF";
       ctx.fillRect(0, 0, width, height);
 
-      // Get current zoom level
-      const zoom = Math.round(viewport.getZoom(true) * 100) / 100;
-      const currentLevel = Math.min(
-        dataset.max_zoom || 0,
-        Math.max(0, Math.floor(Math.log2(zoom)))
-      );
+      // Get current zoom level - use the lowest level (0) which has all tiles
+      // Level 0 is the base level that covers entire image
+      const currentLevel = 0;
 
-      // Calculate tile coordinates
+      // Calculate tile coordinates for level 0
       const tileSize = dataset.tile_size || 256;
-      const startX = Math.floor(imageBounds.x / tileSize);
-      const startY = Math.floor(imageBounds.y / tileSize);
-      const endX = Math.ceil((imageBounds.x + imageBounds.width) / tileSize);
-      const endY = Math.ceil((imageBounds.y + imageBounds.height) / tileSize);
+      const tilesX = Math.ceil(dataset.width / tileSize);
+      const tilesY = Math.ceil(dataset.height / tileSize);
+
+      // Get viewport bounds to determine which tiles to fetch
+      const viewportBounds = viewport.getBounds(true);
+      const tiledImage = viewer.world.getItemAt(0);
+      const imageBounds = tiledImage.viewportToImageRectangle(viewportBounds);
+
+      const startX = Math.max(0, Math.floor(imageBounds.x / tileSize));
+      const startY = Math.max(0, Math.floor(imageBounds.y / tileSize));
+      const endX = Math.min(
+        tilesX,
+        Math.ceil((imageBounds.x + imageBounds.width) / tileSize)
+      );
+      const endY = Math.min(
+        tilesY,
+        Math.ceil((imageBounds.y + imageBounds.height) / tileSize)
+      );
 
       const totalTiles = (endX - startX) * (endY - startY);
       let loadedTiles = 0;
 
-      // Load and draw tiles
+      setExportProgress(
+        `Fetching ${totalTiles} tiles from level ${currentLevel}...`
+      );
       const tilePromises = [];
 
       for (let x = startX; x < endX; x++) {
@@ -83,7 +96,12 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
               const tileUrl = `${window.location.origin}/api/tiles/${dataset.id}/${currentLevel}/${x}/${y}.png`;
 
               const response = await fetch(tileUrl, { credentials: "include" });
-              if (!response.ok) return;
+              if (!response.ok) {
+                console.debug(
+                  `Tile ${currentLevel}/${x}/${y} not available (status ${response.status})`
+                );
+                return;
+              }
 
               const blob = await response.blob();
               const img = await createImageBitmap(blob);
@@ -102,13 +120,15 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
               );
 
               loadedTiles++;
-              setExportProgress(
-                `Loading tiles... ${loadedTiles}/${totalTiles}`
-              );
+              if (loadedTiles % 5 === 0 || loadedTiles === totalTiles) {
+                setExportProgress(
+                  `Loading tiles... ${loadedTiles}/${totalTiles}`
+                );
+              }
             } catch (err) {
-              console.warn(
+              console.debug(
                 `Failed to load tile ${currentLevel}/${x}/${y}:`,
-                err
+                err.message
               );
             }
           })();
@@ -199,27 +219,24 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
       exportCanvas.height = canvasHeight;
       const ctx = exportCanvas.getContext("2d");
 
-      // Fill with background
-      ctx.fillStyle = "#000000";
+      // Fill with white background
+      ctx.fillStyle = "#FFFFFF";
       ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-      // Determine optimal zoom level based on quality
+      // Determine optimal zoom level - level 0 covers entire image
       const tileSize = dataset.tile_size || 256;
-      const optimalLevel = Math.min(
-        dataset.max_zoom || 0,
-        Math.floor(
-          Math.log2(Math.max(dataset.width, dataset.height) / tileSize)
-        )
-      );
+      const optimalLevel = 0; // Always use level 0 which has complete coverage
 
-      // Calculate tiles needed at this level
+      // Calculate tiles needed at level 0
       const tilesX = Math.ceil(dataset.width / tileSize);
       const tilesY = Math.ceil(dataset.height / tileSize);
       const totalTiles = tilesX * tilesY;
 
       let loadedTiles = 0;
 
-      setExportProgress(`Loading ${totalTiles} tiles...`);
+      setExportProgress(
+        `Loading ${totalTiles} tiles from level ${optimalLevel}...`
+      );
 
       // Load and stitch tiles
       const tilePromises = [];
@@ -232,11 +249,18 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
 
               const response = await fetch(tileUrl, { credentials: "include" });
               if (!response.ok) {
-                console.warn(`Tile ${x},${y} not found`);
+                console.debug(
+                  `Tile ${optimalLevel}/${x}/${y} not found (status ${response.status})`
+                );
                 return;
               }
 
               const blob = await response.blob();
+              if (blob.size === 0) {
+                console.debug(`Tile ${optimalLevel}/${x}/${y} is empty`);
+                return;
+              }
+
               const img = await createImageBitmap(blob);
 
               // Calculate position on canvas
@@ -259,7 +283,10 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
                 );
               }
             } catch (err) {
-              console.warn(`Failed to load tile ${x},${y}:`, err);
+              console.debug(
+                `Failed to load tile ${optimalLevel}/${x}/${y}:`,
+                err.message
+              );
             }
           })();
 

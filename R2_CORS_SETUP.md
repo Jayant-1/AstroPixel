@@ -1,13 +1,15 @@
-# Cloudflare R2 CORS Configuration
+# Cloudflare R2 CORS Configuration - CRITICAL
 
-To allow canvas export functionality, you need to configure CORS on your Cloudflare R2 bucket.
+⚠️ **IMPORTANT**: Without proper R2 CORS configuration, tiles will fail to load with CORS errors!
+
+The backend redirects tile requests to R2 for performance, but R2 must have CORS headers configured to allow browser access from your frontend domain.
 
 ## Steps to Configure R2 CORS
 
 1. **Go to Cloudflare Dashboard**
 
    - Navigate to R2 Object Storage
-   - Select your bucket
+   - Select your bucket (pub-d63fc45b98114c6792f6f43a12e4c73b)
 
 2. **Add CORS Policy**
    - Click on "Settings" tab
@@ -38,8 +40,8 @@ To allow canvas export functionality, you need to configure CORS on your Cloudfl
 [
   {
     "AllowedOrigins": [
-      "https://yourdomain.com",
-      "https://www.yourdomain.com",
+      "https://astro-pixel.vercel.app",
+      "https://timevolt-astropixel-backend.hf.space",
       "http://localhost:5173",
       "http://localhost:3000"
     ],
@@ -49,7 +51,8 @@ To allow canvas export functionality, you need to configure CORS on your Cloudfl
       "ETag",
       "Content-Type",
       "Content-Length",
-      "Cache-Control"
+      "Cache-Control",
+      "Access-Control-Allow-Origin"
     ],
     "MaxAgeSeconds": 3600
   }
@@ -110,10 +113,37 @@ The backend has been updated to:
 
 ## Troubleshooting
 
-If export still fails:
+### Common Error: "No 'Access-Control-Allow-Origin' header is present"
 
-1. Clear browser cache
-2. Check browser console for CORS errors
-3. Verify R2 bucket is publicly accessible
-4. Ensure R2_PUBLIC_URL in .env is correct
-5. Test with browser DevTools Network tab to see actual headers
+If you see this error in the console:
+
+```
+Access to image at 'https://pub-xxx.r2.dev/tiles/2/2/0/2.png' from origin 'https://astro-pixel.vercel.app'
+has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+```
+
+**Solution**: You MUST configure CORS on your R2 bucket (see steps above). The backend redirect cannot add CORS headers to R2 responses.
+
+### Steps to Fix:
+
+1. **Configure R2 CORS** (see JSON configuration above) - THIS IS MANDATORY
+2. Wait 1-2 minutes for CORS changes to propagate
+3. Clear browser cache (Ctrl+Shift+Delete or Cmd+Shift+Delete)
+4. Hard refresh the page (Ctrl+F5 or Cmd+Shift+R)
+5. Test tile loading in browser DevTools Network tab
+
+### Additional Checks:
+
+1. Verify R2 bucket is publicly accessible (Custom Domain should be set up)
+2. Ensure R2_PUBLIC_URL in backend .env matches your R2 public domain
+3. Check that bucket name is correct in configuration
+4. Test CORS with curl:
+   ```bash
+   curl -I -H "Origin: https://astro-pixel.vercel.app" \
+     https://pub-d63fc45b98114c6792f6f43a12e4c73b.r2.dev/tiles/2/2/0/0.png
+   ```
+   Should return: `Access-Control-Allow-Origin: *`
+
+### If CORS Still Not Working:
+
+Use Cloudflare Workers as a proxy (see Alternative section above) to manually add CORS headers.

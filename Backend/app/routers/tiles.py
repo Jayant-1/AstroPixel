@@ -68,21 +68,30 @@ async def get_tile(
     elif dataset.created_at:
         cache_bust = str(int(dataset.created_at.timestamp()))
 
-    # If cloud storage (R2) is enabled, always try R2 first for better performance
-    # This works for both new datasets (with metadata flag) and old datasets
+    # If cloud storage (R2) is enabled, check if tiles have been uploaded
+    # Only redirect to R2 if tiles are confirmed to be there
     if cloud_storage.enabled and cloud_storage.public_url:
-        # Generate R2 public URL and redirect
-        tile_url = cloud_storage.get_tile_url(dataset_id, z, x, y, format, cache_bust)
-        if tile_url:
-            logger.debug(f"Redirecting to R2: {tile_url}")
-            return RedirectResponse(
-                url=tile_url,
-                status_code=302,
-                headers={
-                    "Cache-Control": "public, max-age=31536000",
-                    "Access-Control-Allow-Origin": "*",
-                }
-            )
+        # Check if tiles have been uploaded to R2 (metadata flag)
+        tiles_on_r2 = (
+            dataset.extra_metadata and 
+            dataset.extra_metadata.get('tiles_uploaded_to_cloud') == True
+        )
+        
+        if tiles_on_r2:
+            # Generate R2 public URL and redirect
+            tile_url = cloud_storage.get_tile_url(dataset_id, z, x, y, format, cache_bust)
+            if tile_url:
+                logger.debug(f"Redirecting to R2: {tile_url}")
+                return RedirectResponse(
+                    url=tile_url,
+                    status_code=302,
+                    headers={
+                        "Cache-Control": "public, max-age=31536000",
+                        "Access-Control-Allow-Origin": "*",
+                    }
+                )
+        else:
+            logger.debug(f"Tiles not yet uploaded to R2 for dataset {dataset_id}, serving from local")
 
     # Validate zoom level
     if z > dataset.max_zoom:
