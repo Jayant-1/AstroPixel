@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 # Aggressive memory management thresholds
 MEMORY_SAFE_THRESHOLD = 50_000_000  # 50 MP - use standard processing
 CHUNK_SIZE = 4096  # Process image in 4096x4096 pixel chunks
-MAX_MEMORY_PERCENT = 60  # Stop if RAM usage exceeds 60% to be safe
+MAX_MEMORY_PERCENT = 45  # Stop if RAM usage exceeds 45% - be very conservative on memory-limited systems like HF Spaces
 
 # Try to use GPU acceleration if available
 try:
@@ -46,11 +46,16 @@ def check_memory():
     """Check if system has enough memory to continue"""
     memory = psutil.virtual_memory()
     if memory.percent > MAX_MEMORY_PERCENT:
-        logger.warning(
-            f"⚠️ High memory usage: {memory.percent}% - forcing garbage collection"
+        logger.error(
+            f"❌ Memory critical: {memory.percent}% - aborting to prevent crash (threshold: {MAX_MEMORY_PERCENT}%)"
         )
         gc.collect()
         return False
+    if memory.percent > 35:  # Warning at 35%
+        logger.warning(
+            f"⚠️ High memory usage: {memory.percent}% - running gc.collect()"
+        )
+        gc.collect()
     return True
 
 
@@ -75,6 +80,8 @@ class SimpleTileGenerator:
             True if successful
         """
         try:
+            # Aggressive GC before starting
+            gc.collect()
             logger.info(f"Loading image: {self.input_file}")
             if progress_callback:
                 progress_callback(5)

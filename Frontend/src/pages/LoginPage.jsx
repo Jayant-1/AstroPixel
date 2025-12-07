@@ -303,7 +303,7 @@ const LoginPage = () => {
                   Admin Credentials:
                 </p>
                 <p className="text-xs text-blue-300">
-                  <strong>Password:</strong> admin@jayant.com
+                  <strong>Password:</strong> admin123
                 </p>
                 <p className="text-xs text-gray-400 mt-2">
                   (Username field not required)

@@ -114,8 +114,8 @@ class PerfectTileGenerator:
     """
 
     def __init__(self, input_file: Path, output_dir: Path, tile_size: int = 256):
-        if not HAS_NUMPY:
-            raise ImportError("NumPy is required for PerfectTileGenerator but could not be imported")
+        # NumPy is optional - we can work with PIL-only operations
+        # This allows PerfectTileGenerator to work on systems where NumPy fails to import
         
         self.input_file = input_file
         self.output_dir = output_dir
@@ -127,11 +127,16 @@ class PerfectTileGenerator:
         # Check capabilities
         self.has_gpu = HAS_TORCH
         self.has_rasterio = HAS_RASTERIO
+        self.has_numpy = HAS_NUMPY  # Use numpy for optimizations if available, fall back to PIL
 
         if self.has_gpu:
             logger.info("✅ GPU acceleration available")
         if self.has_rasterio:
             logger.info("✅ Rasterio streaming available")
+        if self.has_numpy:
+            logger.info("✅ NumPy available for optimization")
+        else:
+            logger.info("ℹ️ NumPy not available, using PIL-only operations")
 
     def _validate_file(self) -> bool:
         """Validate file can be opened and basic metadata read"""

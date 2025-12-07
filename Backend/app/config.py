@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     DB_USER: str = "neondb_owner"
     DB_PASSWORD: str = "npg_EyAmX9YpNq8l"
     SQLALCHEMY_POOL_SIZE: int = Field(10, env="SQLALCHEMY_POOL_SIZE")
-    SQLALCHEMY_MAX_OVERFLOW: int = Field(5, env="SQLALCHEMY_MAX_OVERFLOW")
+    SQLALCHEMY_MAX_OVERFLOW: int = Field(2, env="SQLALCHEMY_MAX_OVERFLOW")
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"

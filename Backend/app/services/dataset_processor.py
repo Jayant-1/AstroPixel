@@ -266,6 +266,11 @@ class DatasetProcessor:
                 except Exception as e:
                     logger.error(f"Failed to generate preview: {e}")
                 
+                    # Close database session before R2 upload to free connection pool
+                    # The upload can take a long time and shouldn't hold a connection
+                    db.close()
+                    logger.info(f"Database session closed for dataset {dataset_id} - freeing connection pool")
+                
                 # Upload to cloud storage if enabled (Cloudflare R2)
                 logger.info(f"Cloud storage enabled: {cloud_storage.enabled}, Bucket: {cloud_storage.bucket_name}, Public URL: {cloud_storage.public_url}")
                 if cloud_storage.enabled:
@@ -289,8 +294,6 @@ class DatasetProcessor:
                         
                         # Save dataset metadata to R2
                         safe_commit()
-                        db.refresh(dataset)
-                        DatasetProcessor._save_dataset_metadata_to_cloud(dataset)
                         
                     except Exception as e:
                         logger.error(f"❌ Failed to upload to R2: {e}", exc_info=True)
