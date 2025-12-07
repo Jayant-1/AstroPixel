@@ -44,7 +44,6 @@ class User(Base):
 
     # Relationships
     datasets = relationship("Dataset", back_populates="owner", cascade="all, delete-orphan")
-    annotations = relationship("Annotation", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}', username='{self.username}')>"
@@ -127,7 +126,7 @@ class Annotation(Base):
         index=True,
         nullable=False,
     )
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True)
+    user_id = Column(String(255), index=True, nullable=True, default="anonymous")
 
     # Geometry (PostGIS) - Disabled for SQLite
     # For PostgreSQL with PostGIS, uncomment:
@@ -149,7 +148,6 @@ class Annotation(Base):
 
     # Relationships
     dataset = relationship("Dataset", back_populates="annotations")
-    user = relationship("User", back_populates="annotations")
 
     def __repr__(self):
         return f"<Annotation(id={self.id}, dataset_id={self.dataset_id}, label='{self.label}')>"
