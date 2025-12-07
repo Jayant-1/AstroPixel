@@ -10,6 +10,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 import logging
+import time
 
 from app.config import settings
 from app.database import get_db
@@ -80,9 +81,29 @@ def get_user_by_username(db: Session, username: str) -> Optional[User]:
     return db.query(User).filter(User.username == username.lower()).first()
 
 
+# In-memory cache for user lookups (reduces DB load during tile requests)
+_user_cache = {}
+_cache_ttl = 300  # 5 minutes
+
 def get_user_by_id(db: Session, user_id: int) -> Optional[User]:
-    """Get user by ID"""
-    return db.query(User).filter(User.id == user_id).first()
+    """Get user by ID with 5-minute cache to reduce DB load"""
+    cache_key = f"user_{user_id}"
+    now = time.time()
+    
+    # Check cache
+    if cache_key in _user_cache:
+        cached_user, cached_time = _user_cache[cache_key]
+        if now - cached_time < _cache_ttl:
+            return cached_user
+    
+    # Query database
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    # Cache result
+    if user:
+        _user_cache[cache_key] = (user, now)
+    
+    return user
 
 
 def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:

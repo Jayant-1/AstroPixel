@@ -61,22 +61,13 @@ async def get_tile(
             status_code=503, detail=f"Dataset is {dataset.processing_status}"
         )
 
-    # Check if tiles were uploaded to cloud storage (R2)
-    # Only redirect if we have evidence tiles exist in R2
-    tiles_in_cloud = False
+    # If cloud storage (R2) is enabled, always try R2 first for better performance
+    # This works for both new datasets (with metadata flag) and old datasets
     if cloud_storage.enabled and cloud_storage.public_url:
-        # Check if dataset has cloud storage metadata indicating successful upload
-        if dataset.extra_metadata and dataset.extra_metadata.get('tiles_uploaded_to_cloud'):
-            tiles_in_cloud = True
-        # Also check if preview_url exists (means R2 upload happened)
-        elif dataset.extra_metadata and dataset.extra_metadata.get('preview_url'):
-            tiles_in_cloud = True
-    
-    if tiles_in_cloud:
-        # Redirect to R2 public URL for better performance
+        # Generate R2 public URL and redirect
         tile_url = cloud_storage.get_tile_url(dataset_id, z, x, y, format)
-        logger.debug(f"Redirecting to R2: {tile_url}")
         if tile_url:
+            logger.debug(f"Redirecting to R2: {tile_url}")
             return RedirectResponse(
                 url=tile_url,
                 status_code=302,

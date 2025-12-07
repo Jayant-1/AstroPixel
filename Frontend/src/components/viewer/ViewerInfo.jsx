@@ -44,7 +44,7 @@ const ViewerInfo = ({ dataset }) => {
         >
           {dataset.id ? (
             <img
-              src={`${API_BASE_URL}/datasets/${dataset.id}_preview.jpg`}
+              src={dataset.extra_metadata?.preview_url || `${API_BASE_URL}/datasets/${dataset.id}_preview.jpg`}
               alt={`${dataset.name} preview`}
               className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-300"
               onError={(e) => {

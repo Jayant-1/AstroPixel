@@ -304,8 +304,11 @@ const DatasetCard = ({ dataset, onClick }) => {
     }
   };
 
-  // Preview image URL (served from backend static mount)
-  const previewUrl = dataset.id
+  // Preview image URL from dataset metadata (stored in R2)
+  // Falls back to constructed URL for legacy datasets
+  const previewUrl = dataset.extra_metadata?.preview_url
+    ? dataset.extra_metadata.preview_url
+    : dataset.id
     ? `${API_BASE_URL}/datasets/${dataset.id}_preview.jpg`
     : null;
 

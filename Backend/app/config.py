@@ -26,8 +26,8 @@ class Settings(BaseSettings):
     DB_NAME: str = "neondb"
     DB_USER: str = "neondb_owner"
     DB_PASSWORD: str = "npg_EyAmX9YpNq8l"
-    SQLALCHEMY_POOL_SIZE: int = Field(10, env="SQLALCHEMY_POOL_SIZE")
-    SQLALCHEMY_MAX_OVERFLOW: int = Field(2, env="SQLALCHEMY_MAX_OVERFLOW")
+    SQLALCHEMY_POOL_SIZE: int = Field(20, env="SQLALCHEMY_POOL_SIZE")
+    SQLALCHEMY_MAX_OVERFLOW: int = Field(10, env="SQLALCHEMY_MAX_OVERFLOW")
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -78,6 +78,7 @@ class Settings(BaseSettings):
     AWS_BUCKET_NAME: str = ""
     AWS_REGION: str = "auto"  # Use 'auto' for R2
     S3_ENDPOINT_URL: str = ""  # R2 endpoint: https://<account_id>.r2.cloudflarestorage.com
+    R2_UPLOAD_MAX_WORKERS: int = 20  # Parallel upload threads (10-50 recommended, 10 for HF Spaces)
     R2_PUBLIC_URL: str = ""  # Public bucket URL: https://pub-xxxx.r2.dev
 
     @field_validator("USE_S3", mode="before")

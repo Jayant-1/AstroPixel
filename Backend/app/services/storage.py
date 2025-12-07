@@ -12,6 +12,8 @@ import logging
 import os
 from typing import Optional
 import mimetypes
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 
 from app.config import settings
 
@@ -125,14 +127,15 @@ class CloudStorage:
             return False
     
     def upload_tiles_directory(self, local_dir: Path, dataset_id: int, 
-                                progress_callback=None) -> int:
+                                progress_callback=None, max_workers: int = None) -> int:
         """
-        Upload entire tiles directory to cloud storage
+        Upload entire tiles directory to cloud storage using parallel uploads
         
         Args:
             local_dir: Local tiles directory (e.g., tiles/1/)
             dataset_id: Dataset ID for remote path prefix
             progress_callback: Optional callback(uploaded, total)
+            max_workers: Number of parallel upload threads (default: 20)
             
         Returns:
             Number of files uploaded
@@ -145,27 +148,64 @@ class CloudStorage:
             logger.error(f"Tiles directory not found: {local_dir}")
             return 0
         
+        # Collect all files to upload
+        files = [f for f in local_dir.rglob('*') if f.is_file()]
+        total_files = len(files)
+        
+        if total_files == 0:
+            logger.warning(f"No files found in {local_dir}")
+            return 0
+        
+        # Use configured max_workers or default to 20
+        if max_workers is None:
+            max_workers = settings.R2_UPLOAD_MAX_WORKERS
+        
+        logger.info(f"📤 Starting parallel tile upload: {total_files} files with {max_workers} workers for dataset {dataset_id}")
+        start_time = time.time()
+        
         uploaded = 0
-        files = list(local_dir.rglob('*'))
-        total_files = len([f for f in files if f.is_file()])
+        failed = 0
         
-        logger.info(f"📤 Starting tile upload: {total_files} files from {local_dir} for dataset {dataset_id}")
-        
-        for file_path in files:
-            if file_path.is_file():
-                # Create remote key: tiles/{dataset_id}/{z}/{x}/{y}.jpg
+        def upload_single_tile(file_path: Path) -> tuple[bool, str]:
+            """Upload a single tile and return (success, filename)"""
+            try:
                 relative_path = file_path.relative_to(local_dir)
-                remote_key = f"tiles/{dataset_id}/{relative_path}".replace("\\", "/")  # Ensure forward slashes
-                
-                if self.upload_file(file_path, remote_key):
+                remote_key = f"tiles/{dataset_id}/{relative_path}".replace("\\", "/")
+                success = self.upload_file(file_path, remote_key)
+                return (success, file_path.name)
+            except Exception as e:
+                logger.error(f"Error uploading {file_path.name}: {e}")
+                return (False, file_path.name)
+        
+        # Use ThreadPoolExecutor for parallel uploads
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all upload tasks
+            future_to_file = {executor.submit(upload_single_tile, f): f for f in files}
+            
+            # Process completed uploads
+            for future in as_completed(future_to_file):
+                success, filename = future.result()
+                if success:
                     uploaded += 1
                 else:
-                    logger.warning(f"Failed to upload tile: {file_path.name}")
+                    failed += 1
+                    logger.warning(f"Failed to upload tile: {filename}")
+                
+                # Report progress every 100 files or at key milestones
+                if uploaded % 100 == 0 or uploaded == total_files:
+                    elapsed = time.time() - start_time
+                    rate = uploaded / elapsed if elapsed > 0 else 0
+                    logger.info(f"Progress: {uploaded}/{total_files} tiles ({rate:.1f} tiles/sec)")
                     
                 if progress_callback:
                     progress_callback(uploaded, total_files)
         
+        elapsed_time = time.time() - start_time
+        rate = uploaded / elapsed_time if elapsed_time > 0 else 0
+        
         logger.info(f"✅ Uploaded {uploaded}/{total_files} tiles to R2 for dataset {dataset_id}")
+        logger.info(f"⏱️  Upload completed in {elapsed_time:.1f}s ({rate:.1f} tiles/sec, {failed} failed)")
+        
         return uploaded
     
     def get_tile_url(self, dataset_id: int, z: int, x: int, y: int, format: str = 'jpg') -> Optional[str]:
