@@ -1,8 +1,8 @@
-import { Check, UploadCloud, X, LogIn } from "lucide-react";
+import { Check, LogIn, UploadCloud, X } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
+import api from "../../services/api";
 import Button from "../ui/Button";
 import Input from "../ui/Input";
 
@@ -161,11 +161,10 @@ const FileUploader = ({ onUpload }) => {
         <label className="flex flex-col items-center gap-3 cursor-pointer">
           <UploadCloud className="w-12 h-12 text-gray-500" />
           <div className="text-center">
-            <p className="text-lg font-medium text-gray-300">
-              Upload Dataset
-            </p>
+            <p className="text-lg font-medium text-gray-300">Upload Dataset</p>
             <p className="text-sm text-gray-500 mt-1">
-              Click to select a .tif, .tiff, .psb, or .psd file (supports files up to 40GB)
+              Click to select a .tif, .tiff, .psb, or .psd file (supports files
+              up to 40GB)
             </p>
           </div>
           <input
@@ -319,11 +318,14 @@ const FileUploader = ({ onUpload }) => {
               <div className="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center">
                 <LogIn className="w-6 h-6 text-blue-400" />
               </div>
-              <h2 className="text-2xl font-bold text-white">Sign In Required</h2>
+              <h2 className="text-2xl font-bold text-white">
+                Sign In Required
+              </h2>
             </div>
 
             <p className="text-gray-300 mb-6">
-              You need to sign in to upload datasets. Create an account or sign in with your existing credentials.
+              You need to sign in to upload datasets. Create an account or sign
+              in with your existing credentials.
             </p>
 
             <div className="flex gap-3">
