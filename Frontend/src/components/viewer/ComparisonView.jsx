@@ -47,7 +47,9 @@ const ComparisonView = ({
       minLevel: 0,
       maxLevel: maxLevel,
       getTileUrl: function (level, x, y) {
-        return `${API_BASE_URL}/api/tiles/${ds.id}/${level}/${x}/${y}.png?v=${cacheBust}`;
+          const token = localStorage.getItem("astropixel_token");
+          const base = `${API_BASE_URL}/api/tiles/${ds.id}/${level}/${x}/${y}.png?v=${cacheBust}`;
+          return token ? `${base}&token=${token}` : base;
       },
     };
   };
@@ -209,7 +211,10 @@ const ComparisonView = ({
       }
 
       // Add fresh overlay image with current dataset
-      console.log("📸 Adding fresh overlay image for dataset:", secondDataset.id);
+      console.log(
+        "📸 Adding fresh overlay image for dataset:",
+        secondDataset.id
+      );
       viewer1Ref.current.addTiledImage({
         tileSource: createTileSource(secondDataset),
         opacity: opacity / 100,
