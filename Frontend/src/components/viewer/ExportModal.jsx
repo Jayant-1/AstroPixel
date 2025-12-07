@@ -27,40 +27,42 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
     try {
       const viewer = viewerRef.current;
       const canvas = viewer.drawer.canvas;
-      
+
       // Get the canvas from OpenSeadragon
       const exportCanvas = document.createElement("canvas");
       const ctx = exportCanvas.getContext("2d");
-      
+
       // Set canvas size to match viewport
       exportCanvas.width = canvas.width;
       exportCanvas.height = canvas.height;
-      
+
       // Draw the current view
       ctx.drawImage(canvas, 0, 0);
-      
+
       setExportProgress("Generating image...");
-      
+
       // Convert to blob
       const quality = getQualityValue();
       const mimeType = exportFormat === "jpg" ? "image/jpeg" : "image/png";
-      
+
       exportCanvas.toBlob(
         (blob) => {
           if (blob) {
             setExportProgress("Downloading...");
-            
+
             // Create download link
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.href = url;
-            link.download = `${dataset.name}_export_${Date.now()}.${exportFormat}`;
+            link.download = `${
+              dataset.name
+            }_export_${Date.now()}.${exportFormat}`;
             link.click();
-            
+
             // Cleanup
             URL.revokeObjectURL(url);
             setExportProgress("Export complete!");
-            
+
             setTimeout(() => {
               onClose();
               setExporting(false);
@@ -83,34 +85,34 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
 
   const exportFullImage = async () => {
     setExportProgress("Fetching full resolution image...");
-    
+
     try {
       // For full image export, we'll download the highest zoom level tiles
       // and stitch them together or use the backend API
-      
+
       // Option 1: Use backend API to generate full image (if available)
       // Option 2: Download and stitch tiles client-side
-      
+
       // For now, we'll download the base level tile
       const response = await fetch(
         `${window.location.origin}/api/tiles/${dataset.id}/0/0/0.${exportFormat}`,
         { credentials: "include" }
       );
-      
+
       if (!response.ok) throw new Error("Failed to fetch image");
-      
+
       setExportProgress("Downloading...");
       const blob = await response.blob();
-      
+
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
       link.download = `${dataset.name}_full.${exportFormat}`;
       link.click();
-      
+
       URL.revokeObjectURL(url);
       setExportProgress("Export complete!");
-      
+
       setTimeout(() => {
         onClose();
         setExporting(false);
@@ -118,7 +120,9 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
       }, 1000);
     } catch (error) {
       console.error("Export error:", error);
-      alert(`Export failed: ${error.message}. Try exporting current view instead.`);
+      alert(
+        `Export failed: ${error.message}. Try exporting current view instead.`
+      );
       setExporting(false);
       setExportProgress("");
     }
@@ -126,7 +130,7 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
 
   const handleExport = async () => {
     setExporting(true);
-    
+
     try {
       if (exportRegion === "current") {
         await exportCurrentView();
@@ -299,7 +303,11 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
             <Button variant="ghost" onClick={onClose} disabled={exporting}>
               Cancel
             </Button>
-            <Button onClick={handleExport} className="gap-2" disabled={exporting}>
+            <Button
+              onClick={handleExport}
+              className="gap-2"
+              disabled={exporting}
+            >
               {exporting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
