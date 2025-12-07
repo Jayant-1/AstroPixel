@@ -47,9 +47,9 @@ const ComparisonView = ({
       minLevel: 0,
       maxLevel: maxLevel,
       getTileUrl: function (level, x, y) {
-          const token = localStorage.getItem("astropixel_token");
-          const base = `${API_BASE_URL}/api/tiles/${ds.id}/${level}/${x}/${y}.png?v=${cacheBust}`;
-          return token ? `${base}&token=${token}` : base;
+        const token = localStorage.getItem("astropixel_token");
+        const base = `${API_BASE_URL}/api/tiles/${ds.id}/${level}/${x}/${y}.png?v=${cacheBust}`;
+        return token ? `${base}&token=${token}` : base;
       },
     };
   };
