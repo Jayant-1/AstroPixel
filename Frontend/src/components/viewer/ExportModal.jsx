@@ -22,59 +22,147 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
       return;
     }
 
-    setExportProgress("Capturing current view...");
+    setExportProgress("Preparing export...");
 
     try {
       const viewer = viewerRef.current;
-      const canvas = viewer.drawer.canvas;
+      const viewport = viewer.viewport;
+      const tiledImage = viewer.world.getItemAt(0);
 
-      // Get the canvas from OpenSeadragon
+      if (!tiledImage) {
+        throw new Error("No image loaded in viewer");
+      }
+
+      // Get viewport bounds in image coordinates
+      const viewportBounds = viewport.getBounds(true);
+      const imageBounds = tiledImage.viewportToImageRectangle(viewportBounds);
+
+      // Calculate dimensions based on quality
+      const quality = getQualityValue();
+      const scaleFactor = quality === 1.0 ? 1.0 : quality === 0.8 ? 0.75 : 0.5;
+
+      const width = Math.floor(imageBounds.width * scaleFactor);
+      const height = Math.floor(imageBounds.height * scaleFactor);
+
+      setExportProgress(`Fetching tiles (${width}×${height})...`);
+
+      // Create canvas for export
       const exportCanvas = document.createElement("canvas");
+      exportCanvas.width = width;
+      exportCanvas.height = height;
       const ctx = exportCanvas.getContext("2d");
 
-      // Set canvas size to match viewport
-      exportCanvas.width = canvas.width;
-      exportCanvas.height = canvas.height;
+      // Fill with background color
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, width, height);
 
-      // Draw the current view
-      ctx.drawImage(canvas, 0, 0);
+      // Get current zoom level
+      const zoom = Math.round(viewport.getZoom(true) * 100) / 100;
+      const currentLevel = Math.min(
+        dataset.max_zoom || 0,
+        Math.max(0, Math.floor(Math.log2(zoom)))
+      );
+
+      // Calculate tile coordinates
+      const tileSize = dataset.tile_size || 256;
+      const startX = Math.floor(imageBounds.x / tileSize);
+      const startY = Math.floor(imageBounds.y / tileSize);
+      const endX = Math.ceil((imageBounds.x + imageBounds.width) / tileSize);
+      const endY = Math.ceil((imageBounds.y + imageBounds.height) / tileSize);
+
+      const totalTiles = (endX - startX) * (endY - startY);
+      let loadedTiles = 0;
+
+      // Load and draw tiles
+      const tilePromises = [];
+
+      for (let x = startX; x < endX; x++) {
+        for (let y = startY; y < endY; y++) {
+          const tilePromise = (async () => {
+            try {
+              const tileUrl = `${window.location.origin}/api/tiles/${dataset.id}/${currentLevel}/${x}/${y}.png`;
+
+              const response = await fetch(tileUrl, { credentials: "include" });
+              if (!response.ok) return;
+
+              const blob = await response.blob();
+              const img = await createImageBitmap(blob);
+
+              // Calculate position on canvas
+              const canvasX = (x * tileSize - imageBounds.x) * scaleFactor;
+              const canvasY = (y * tileSize - imageBounds.y) * scaleFactor;
+              const canvasTileSize = tileSize * scaleFactor;
+
+              ctx.drawImage(
+                img,
+                canvasX,
+                canvasY,
+                canvasTileSize,
+                canvasTileSize
+              );
+
+              loadedTiles++;
+              setExportProgress(
+                `Loading tiles... ${loadedTiles}/${totalTiles}`
+              );
+            } catch (err) {
+              console.warn(
+                `Failed to load tile ${currentLevel}/${x}/${y}:`,
+                err
+              );
+            }
+          })();
+
+          tilePromises.push(tilePromise);
+        }
+      }
+
+      // Wait for all tiles to load
+      await Promise.all(tilePromises);
 
       setExportProgress("Generating image...");
 
-      // Convert to blob
-      const quality = getQualityValue();
-      const mimeType = exportFormat === "jpg" ? "image/jpeg" : "image/png";
+      // Convert to blob based on format
+      const mimeType =
+        exportFormat === "jpg"
+          ? "image/jpeg"
+          : exportFormat === "tiff"
+          ? "image/tiff"
+          : "image/png";
+      const qualityValue =
+        exportFormat === "jpg" ? getQualityValue() : undefined;
 
-      exportCanvas.toBlob(
-        (blob) => {
-          if (blob) {
-            setExportProgress("Downloading...");
+      const blob = await new Promise((resolve, reject) => {
+        exportCanvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error("Failed to create blob"));
+          },
+          mimeType,
+          qualityValue
+        );
+      });
 
-            // Create download link
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = `${
-              dataset.name
-            }_export_${Date.now()}.${exportFormat}`;
-            link.click();
+      setExportProgress("Downloading...");
 
-            // Cleanup
-            URL.revokeObjectURL(url);
-            setExportProgress("Export complete!");
+      // Download the file
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${dataset.name}_export_${Date.now()}.${exportFormat}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
 
-            setTimeout(() => {
-              onClose();
-              setExporting(false);
-              setExportProgress("");
-            }, 1000);
-          } else {
-            throw new Error("Failed to create blob");
-          }
-        },
-        mimeType,
-        quality
-      );
+      // Cleanup
+      URL.revokeObjectURL(url);
+      setExportProgress("Export complete!");
+
+      setTimeout(() => {
+        onClose();
+        setExporting(false);
+        setExportProgress("");
+      }, 1500);
     } catch (error) {
       console.error("Export error:", error);
       alert(`Export failed: ${error.message}`);
@@ -84,31 +172,137 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
   };
 
   const exportFullImage = async () => {
-    setExportProgress("Fetching full resolution image...");
+    setExportProgress("Preparing full image export...");
 
     try {
-      // For full image export, we'll download the highest zoom level tiles
-      // and stitch them together or use the backend API
+      // Get quality settings
+      const quality = getQualityValue();
+      const scaleFactor = quality === 1.0 ? 1.0 : quality === 0.8 ? 0.75 : 0.5;
 
-      // Option 1: Use backend API to generate full image (if available)
-      // Option 2: Download and stitch tiles client-side
+      // Calculate canvas dimensions based on quality
+      const canvasWidth = Math.floor(dataset.width * scaleFactor);
+      const canvasHeight = Math.floor(dataset.height * scaleFactor);
 
-      // For now, we'll download the base level tile
-      const response = await fetch(
-        `${window.location.origin}/api/tiles/${dataset.id}/0/0/0.${exportFormat}`,
-        { credentials: "include" }
+      // Limit maximum export size to prevent browser crash
+      const maxDimension = 16384; // Most browsers support up to 16384px
+      if (canvasWidth > maxDimension || canvasHeight > maxDimension) {
+        throw new Error(
+          `Image too large for full export. Use "Current View" mode or select "Low" quality. Max dimension: ${maxDimension}px`
+        );
+      }
+
+      setExportProgress(`Creating canvas (${canvasWidth}×${canvasHeight})...`);
+
+      // Create canvas
+      const exportCanvas = document.createElement("canvas");
+      exportCanvas.width = canvasWidth;
+      exportCanvas.height = canvasHeight;
+      const ctx = exportCanvas.getContext("2d");
+
+      // Fill with background
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+      // Determine optimal zoom level based on quality
+      const tileSize = dataset.tile_size || 256;
+      const optimalLevel = Math.min(
+        dataset.max_zoom || 0,
+        Math.floor(
+          Math.log2(Math.max(dataset.width, dataset.height) / tileSize)
+        )
       );
 
-      if (!response.ok) throw new Error("Failed to fetch image");
+      // Calculate tiles needed at this level
+      const tilesX = Math.ceil(dataset.width / tileSize);
+      const tilesY = Math.ceil(dataset.height / tileSize);
+      const totalTiles = tilesX * tilesY;
+
+      let loadedTiles = 0;
+
+      setExportProgress(`Loading ${totalTiles} tiles...`);
+
+      // Load and stitch tiles
+      const tilePromises = [];
+
+      for (let x = 0; x < tilesX; x++) {
+        for (let y = 0; y < tilesY; y++) {
+          const tilePromise = (async () => {
+            try {
+              const tileUrl = `${window.location.origin}/api/tiles/${dataset.id}/${optimalLevel}/${x}/${y}.png`;
+
+              const response = await fetch(tileUrl, { credentials: "include" });
+              if (!response.ok) {
+                console.warn(`Tile ${x},${y} not found`);
+                return;
+              }
+
+              const blob = await response.blob();
+              const img = await createImageBitmap(blob);
+
+              // Calculate position on canvas
+              const canvasX = x * tileSize * scaleFactor;
+              const canvasY = y * tileSize * scaleFactor;
+              const canvasTileSize = tileSize * scaleFactor;
+
+              ctx.drawImage(
+                img,
+                canvasX,
+                canvasY,
+                canvasTileSize,
+                canvasTileSize
+              );
+
+              loadedTiles++;
+              if (loadedTiles % 10 === 0 || loadedTiles === totalTiles) {
+                setExportProgress(
+                  `Loading tiles... ${loadedTiles}/${totalTiles}`
+                );
+              }
+            } catch (err) {
+              console.warn(`Failed to load tile ${x},${y}:`, err);
+            }
+          })();
+
+          tilePromises.push(tilePromise);
+        }
+      }
+
+      // Wait for all tiles
+      await Promise.all(tilePromises);
+
+      setExportProgress("Generating image file...");
+
+      // Convert to blob based on format
+      const mimeType =
+        exportFormat === "jpg"
+          ? "image/jpeg"
+          : exportFormat === "tiff"
+          ? "image/tiff"
+          : "image/png";
+      const qualityValue =
+        exportFormat === "jpg" ? getQualityValue() : undefined;
+
+      const blob = await new Promise((resolve, reject) => {
+        exportCanvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error("Failed to create blob"));
+          },
+          mimeType,
+          qualityValue
+        );
+      });
 
       setExportProgress("Downloading...");
-      const blob = await response.blob();
 
+      // Download
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${dataset.name}_full.${exportFormat}`;
+      link.download = `${dataset.name}_full_${Date.now()}.${exportFormat}`;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
 
       URL.revokeObjectURL(url);
       setExportProgress("Export complete!");
@@ -117,12 +311,10 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
         onClose();
         setExporting(false);
         setExportProgress("");
-      }, 1000);
+      }, 1500);
     } catch (error) {
-      console.error("Export error:", error);
-      alert(
-        `Export failed: ${error.message}. Try exporting current view instead.`
-      );
+      console.error("Full export error:", error);
+      alert(`Export failed: ${error.message}`);
       setExporting(false);
       setExportProgress("");
     }
@@ -270,18 +462,38 @@ const ExportModal = ({ isOpen, onClose, dataset, viewerRef }) => {
                   <span className="text-white">{dataset.name}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Dimensions:</span>
+                  <span>Format:</span>
+                  <span className="text-white uppercase">{exportFormat}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Quality:</span>
+                  <span className="text-white capitalize">{exportQuality}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Original Size:</span>
                   <span className="text-white">
                     {dataset.width?.toLocaleString()} ×{" "}
                     {dataset.height?.toLocaleString()} px
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Estimated Size:</span>
-                  <span className="text-white">
-                    {exportRegion === "full" ? "~500 MB" : "~10 MB"}
-                  </span>
-                </div>
+                {exportRegion === "full" && (
+                  <div className="flex justify-between">
+                    <span>Export Size:</span>
+                    <span className="text-white">
+                      {(() => {
+                        const scale =
+                          exportQuality === "high"
+                            ? 1.0
+                            : exportQuality === "medium"
+                            ? 0.75
+                            : 0.5;
+                        const w = Math.floor(dataset.width * scale);
+                        const h = Math.floor(dataset.height * scale);
+                        return `${w.toLocaleString()} × ${h.toLocaleString()} px`;
+                      })()}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -205,6 +205,7 @@ async def complete_chunked_upload(
     description: Optional[str] = Query(None),
     category: str = Query(..., pattern="^(earth|mars|space)$"),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_required),
 ):
     """
     Complete a chunked upload by assembling chunks and processing the dataset.
@@ -246,6 +247,14 @@ async def complete_chunked_upload(
         
         try:
             dataset = await DatasetProcessor.create_dataset_entry(final_path, dataset_info, db)
+            
+            # Set owner and expiry for user uploads (not demo datasets)
+            dataset.owner_id = current_user.id
+            dataset.is_demo = False
+            dataset.expires_at = datetime.utcnow() + timedelta(hours=24)
+            db.commit()
+            db.refresh(dataset)
+            
         except ValueError as ve:
             logger.error(f"Dataset creation failed (ValueError): {ve}")
             raise HTTPException(status_code=400, detail=str(ve))
@@ -259,7 +268,7 @@ async def complete_chunked_upload(
             final_path
         )
         
-        logger.info(f"Dataset {dataset.id} created from chunked upload")
+        logger.info(f"Dataset {dataset.id} created from chunked upload by user {current_user.id}, expires at {dataset.expires_at}")
         return dataset
         
     except HTTPException:

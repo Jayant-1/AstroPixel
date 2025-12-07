@@ -95,6 +95,10 @@ const ViewerCanvas = ({
         prefixUrl:
           "https://cdn.jsdelivr.net/npm/openseadragon@4.1/build/openseadragon/images/",
 
+        // CORS configuration for canvas export
+        crossOriginPolicy: "Anonymous",
+        ajaxWithCredentials: false,
+
         // Tile source configuration
         tileSources: {
           height: dataset.height,

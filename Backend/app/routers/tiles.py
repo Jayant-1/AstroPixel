@@ -78,7 +78,10 @@ async def get_tile(
             return RedirectResponse(
                 url=tile_url,
                 status_code=302,
-                headers={"Cache-Control": "public, max-age=31536000"}
+                headers={
+                    "Cache-Control": "public, max-age=31536000",
+                    "Access-Control-Allow-Origin": "*",
+                }
             )
 
     # Validate zoom level
@@ -142,6 +145,8 @@ async def get_tile(
             "Cache-Control": "public, max-age=31536000, immutable",  # 1 year, immutable
             "X-Tile-Status": "exists",
             "X-Tile-Format": format,  # Indicate actual format served
+            "Access-Control-Allow-Origin": "*",  # Allow CORS for canvas export
+            "Cross-Origin-Resource-Policy": "cross-origin",
         },
     )
 
@@ -175,7 +180,10 @@ async def get_preview(dataset_id: int, db: Session = Depends(get_db)):
             return RedirectResponse(
                 url=preview_url,
                 status_code=302,
-                headers={"Cache-Control": "public, max-age=86400"}
+                headers={
+                    "Cache-Control": "public, max-age=86400",
+                    "Access-Control-Allow-Origin": "*",
+                }
             )
         # Fallback to constructing R2 URL
         preview_url = f"{cloud_storage.public_url}/previews/{dataset_id}_preview.jpg"
@@ -184,7 +192,10 @@ async def get_preview(dataset_id: int, db: Session = Depends(get_db)):
         return RedirectResponse(
             url=preview_url,
             status_code=302,
-            headers={"Cache-Control": "public, max-age=86400"}
+            headers={
+                "Cache-Control": "public, max-age=86400",
+                "Access-Control-Allow-Origin": "*",
+            }
         )
 
     # Fallback to local file
@@ -196,7 +207,11 @@ async def get_preview(dataset_id: int, db: Session = Depends(get_db)):
     return FileResponse(
         preview_path,
         media_type="image/jpeg",
-        headers={"Cache-Control": "public, max-age=86400"},  # 1 day
+        headers={
+            "Cache-Control": "public, max-age=86400",  # 1 day
+            "Access-Control-Allow-Origin": "*",  # Allow CORS for canvas export
+            "Cross-Origin-Resource-Policy": "cross-origin",
+        },
     )
 
 
