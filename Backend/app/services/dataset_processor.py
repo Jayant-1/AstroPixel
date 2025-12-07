@@ -116,10 +116,32 @@ class DatasetProcessor:
         """
         import psutil
         import gc
+        import time
+        from sqlalchemy.exc import OperationalError
         
         # Create new database session for background task
         from app.database import SessionLocal
         db = SessionLocal()
+        
+        def safe_commit(max_retries=3):
+            """Safely commit with retry logic for connection issues"""
+            for attempt in range(max_retries):
+                try:
+                    db.commit()
+                    return True
+                except OperationalError as e:
+                    logger.warning(f"Database commit failed (attempt {attempt + 1}/{max_retries}): {e}")
+                    try:
+                        db.rollback()
+                    except:
+                        pass
+                    
+                    if attempt < max_retries - 1:
+                        time.sleep(2)  # Wait before retry
+                    else:
+                        logger.error(f"Failed to commit after {max_retries} attempts")
+                        return False
+            return False
         
         try:
             dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
@@ -150,7 +172,7 @@ class DatasetProcessor:
                 dataset.processing_progress = 0
                 dataset.extra_metadata = dataset.extra_metadata or {}
                 dataset.extra_metadata['error'] = f"Insufficient memory. Available: {available_mb:.0f}MB, Required: ~{min_required_mb:.0f}MB. Try a smaller file or upgrade server."
-                db.commit()
+                safe_commit()
                 return
 
             # Force garbage collection before starting
@@ -158,7 +180,7 @@ class DatasetProcessor:
 
             dataset.processing_status = "processing"
             dataset.processing_progress = 0
-            db.commit()
+            safe_commit()
 
             # LAZY IMPORT: Try perfect tile generator first, fall back to simple generator
             tile_path = Path(dataset.tile_base_path)
@@ -188,7 +210,7 @@ class DatasetProcessor:
                     dataset.processing_status = "failed"
                     dataset.extra_metadata = dataset.extra_metadata or {}
                     dataset.extra_metadata['error'] = f"No tile generator available: {str(e2)}"
-                    db.commit()
+                    safe_commit()
                     return
             
             if not tile_gen:
@@ -196,7 +218,7 @@ class DatasetProcessor:
                 dataset.processing_status = "failed"
                 dataset.extra_metadata = dataset.extra_metadata or {}
                 dataset.extra_metadata['error'] = "No tile generator available"
-                db.commit()
+                safe_commit()
                 return
 
             logger.info(f"Starting background tile generation for dataset {dataset_id}")
@@ -204,7 +226,7 @@ class DatasetProcessor:
             # Progress callback
             def update_progress(progress: int):
                 dataset.processing_progress = progress
-                db.commit()
+                safe_commit()
                 logger.info(f"Dataset {dataset_id} progress: {progress}%")
 
             success = tile_gen.generate_tiles(progress_callback=update_progress)
@@ -213,7 +235,7 @@ class DatasetProcessor:
                 # Mark as completed FIRST and commit immediately
                 dataset.processing_status = "completed"
                 dataset.processing_progress = 100
-                db.commit()
+                safe_commit()
                 logger.info(f"Dataset {dataset_id} processing completed - status committed")
 
                 # Generate preview thumbnail
@@ -245,7 +267,7 @@ class DatasetProcessor:
                                 logger.info(f"✅ Uploaded preview to: {preview_url}")
                         
                         # Save dataset metadata to R2
-                        db.commit()
+                        safe_commit()
                         db.refresh(dataset)
                         DatasetProcessor._save_dataset_metadata_to_cloud(dataset)
                         
@@ -253,7 +275,7 @@ class DatasetProcessor:
                         logger.error(f"❌ Failed to upload to R2: {e}", exc_info=True)
                         dataset.extra_metadata = dataset.extra_metadata or {}
                         dataset.extra_metadata['r2_upload_error'] = str(e)
-                        db.commit()
+                        safe_commit()
                 else:
                     logger.warning(f"⚠️  Cloud storage disabled - tiles NOT uploaded to R2 (tiles available locally only)")
             else:
@@ -261,14 +283,14 @@ class DatasetProcessor:
                 dataset.processing_progress = 0
                 logger.error(f"Dataset {dataset_id} processing failed")
 
-            db.commit()
+            safe_commit()
 
         except Exception as e:
             logger.error(f"Error in background tile processing for dataset {dataset_id}: {e}", exc_info=True)
             if "dataset" in locals():
                 dataset.processing_status = "failed"
                 dataset.processing_progress = 0
-                db.commit()
+                safe_commit()
         finally:
             db.close()
 
