@@ -56,6 +56,8 @@ const Viewer = () => {
     if (selectedDataset && String(selectedDataset.id) !== String(datasetId)) {
       console.log("🔄 Dataset ID changed, clearing old dataset");
       setSelectedDataset(null);
+      // Also clear second dataset in compare mode to prevent tiles from showing
+      setSecondDataset(null);
     }
   }, [datasetId, selectedDataset, setSelectedDataset]);
 

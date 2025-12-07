@@ -23,7 +23,7 @@ const ComparisonView = ({
   const container2Ref = useRef(null);
   const syncHandlersRef = useRef(null);
 
-  // Create tile source helper
+  // Create tile source helper with cache busting
   const createTileSource = (ds) => {
     const tileSize = ds.tile_size || 256;
     const maxLevel = Math.max(
@@ -31,6 +31,13 @@ const ComparisonView = ({
       ds.max_zoom ??
         Math.ceil(Math.log2(Math.max(ds.width, ds.height) / tileSize))
     );
+
+    // Add version parameter to prevent tile caching issues when switching datasets
+    const cacheBust = ds.updated_at
+      ? new Date(ds.updated_at).getTime()
+      : ds.created_at
+      ? new Date(ds.created_at).getTime()
+      : Date.now();
 
     return {
       height: ds.height,
@@ -40,7 +47,7 @@ const ComparisonView = ({
       minLevel: 0,
       maxLevel: maxLevel,
       getTileUrl: function (level, x, y) {
-        return `${API_BASE_URL}/api/tiles/${ds.id}/${level}/${x}/${y}.png`;
+        return `${API_BASE_URL}/api/tiles/${ds.id}/${level}/${x}/${y}.png?v=${cacheBust}`;
       },
     };
   };
@@ -188,27 +195,31 @@ const ComparisonView = ({
       // Check if overlay already exists
       const itemCount = viewer1Ref.current.world.getItemCount();
 
-      if (itemCount === 1) {
-        // Only base image exists, add overlay
-        console.log("📸 Adding overlay image");
-        viewer1Ref.current.addTiledImage({
-          tileSource: createTileSource(secondDataset),
-          opacity: opacity / 100,
-          success: () => {
-            console.log("✅ Overlay image added successfully");
-          },
-          error: (e) => {
-            console.error("❌ Failed to add overlay image:", e);
-          },
-        });
-      } else if (itemCount > 1) {
-        // Overlay already exists, just update opacity
-        const overlayItem = viewer1Ref.current.world.getItemAt(1);
-        if (overlayItem) {
-          overlayItem.setOpacity(opacity / 100);
-          console.log("✅ Overlay opacity updated:", opacity / 100);
+      // Always remove old overlay if it exists (even if dataset didn't change)
+      // to ensure we're loading the correct tile dataset
+      if (itemCount > 1) {
+        console.log("🗑️ Removing existing overlay");
+        try {
+          viewer1Ref.current.world.removeItem(
+            viewer1Ref.current.world.getItemAt(1)
+          );
+        } catch (e) {
+          console.warn("Could not remove old overlay:", e);
         }
       }
+
+      // Add fresh overlay image with current dataset
+      console.log("📸 Adding fresh overlay image for dataset:", secondDataset.id);
+      viewer1Ref.current.addTiledImage({
+        tileSource: createTileSource(secondDataset),
+        opacity: opacity / 100,
+        success: () => {
+          console.log("✅ Overlay image added successfully");
+        },
+        error: (e) => {
+          console.error("❌ Failed to add overlay image:", e);
+        },
+      });
     } else if (comparisonMode === "sideBySide") {
       console.log("🔄 Mode changed to SIDE-BY-SIDE");
       // Remove overlay image if it exists

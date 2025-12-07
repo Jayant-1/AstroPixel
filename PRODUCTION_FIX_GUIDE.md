@@ -1,6 +1,7 @@
 # URGENT: Production Annotation Fix - Deployment Guide
 
 ## Executive Summary
+
 Annotation creation is failing on production with a 500 error because the PostgreSQL database expects `user_id` to be an integer, but the frontend sends string values like `"demo-user"`.
 
 **Status:** Model code updated ✅ | Database schema still needs update ❌
@@ -12,6 +13,7 @@ Annotation creation is failing on production with a 500 error because the Postgr
 The production Hugging Face database needs a schema migration. You have two options:
 
 #### Option A: Direct SQL via Hugging Face Terminal (FASTEST)
+
 1. Go to https://huggingface.co/spaces/timevolt/astropixel-backend (or your space URL)
 2. Open the Terminal tab
 3. Run these commands:
@@ -55,13 +57,16 @@ db.close()
 ```
 
 #### Option B: Via Migration Script (If Direct SQL Fails)
+
 ```bash
 cd /home/user/app
 python fix_production_db.py
 ```
 
 ### 2. Redeploy Backend Code
+
 After the database is fixed:
+
 1. Push updated code to GitHub (`git push`)
 2. Rebuild Hugging Face Space:
    - Go to Space settings
@@ -71,12 +76,16 @@ After the database is fixed:
 ## What Was Changed
 
 ### Code Changes
+
 ✅ **Already committed:**
+
 - `Backend/app/models.py` - Changed `user_id` from `Integer` FK to `String(255)`
 - `Astropixel-backend/app/models.py` - Same change
 
 ### Database Migration
+
 🚀 **Scripts provided:**
+
 - `Backend/fix_production_db.py` - One-click fix for production
 - `Backend/migrate_user_id.py` - Generic migration for SQLite or PostgreSQL
 - `Backend/SCHEMA_MIGRATION.md` - Detailed documentation
@@ -87,20 +96,29 @@ Test annotation creation in browser console:
 
 ```javascript
 // In browser console on viewer page
-const response = await fetch('https://timevolt-astropixel-backend.hf.space/api/annotations', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    dataset_id: 1,
-    user_id: 'demo-user',
-    geometry: { type: 'Rectangle', coordinates: [[0, 0], [100, 100]] },
-    annotation_type: 'rectangle',
-    label: 'Test',
-    description: 'test annotation',
-    confidence: 1,
-    properties: { color: '#10b981' }
-  })
-});
+const response = await fetch(
+  "https://timevolt-astropixel-backend.hf.space/api/annotations",
+  {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      dataset_id: 1,
+      user_id: "demo-user",
+      geometry: {
+        type: "Rectangle",
+        coordinates: [
+          [0, 0],
+          [100, 100],
+        ],
+      },
+      annotation_type: "rectangle",
+      label: "Test",
+      description: "test annotation",
+      confidence: 1,
+      properties: { color: "#10b981" },
+    }),
+  }
+);
 console.log(await response.json());
 ```
 
@@ -109,11 +127,14 @@ Expected: `200 Created` with annotation data (not 500 error)
 ## Troubleshooting
 
 ### Still Getting 500 Error After Fix?
+
 1. Verify database fix worked - check `user_id` column type:
+
    ```sql
-   SELECT column_name, data_type FROM information_schema.columns 
+   SELECT column_name, data_type FROM information_schema.columns
    WHERE table_name='annotations' AND column_name='user_id';
    ```
+
    Should show: `user_id | character varying`
 
 2. Restart the backend Space after database fix
@@ -121,7 +142,9 @@ Expected: `200 Created` with annotation data (not 500 error)
 3. Check logs for other errors
 
 ### Migration Script Errors?
+
 Run with verbose logging:
+
 ```bash
 python -c "
 import logging
@@ -145,12 +168,15 @@ python migrate_user_id.py
 Then test annotation creation locally to ensure it works before production deployment.
 
 ## Questions?
+
 - Check `SCHEMA_MIGRATION.md` for detailed documentation
 - Review the model changes in `app/models.py`
 - Check Hugging Face Space logs for detailed error messages
 
 ---
-**Timeline:** 
+
+**Timeline:**
+
 - ⏰ Database fix: ~5 minutes
 - ⏰ Code redeploy: ~2-5 minutes (automatic if using GitHub auto-rebuild)
 - ⏰ Total: ~10 minutes

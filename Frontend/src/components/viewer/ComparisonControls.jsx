@@ -30,10 +30,14 @@ const ComparisonControls = ({
             const selected = datasets.find(
               (d) => d.id === e.target.value || String(d.id) === e.target.value
             );
-            setSecondDataset(selected);
+            // Only set if different from primary dataset
+            if (selected && selected.id !== dataset.id) {
+              setSecondDataset(selected);
+            }
           }}
           className="w-full px-4 py-3 bg-gray-800 border-2 border-gray-700 rounded-lg text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
         >
+          <option value="">-- Select a dataset --</option>
           {availableDatasets.map((d) => (
             <option key={d.id} value={d.id}>
               {d.name}
