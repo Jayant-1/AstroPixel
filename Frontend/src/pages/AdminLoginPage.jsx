@@ -103,7 +103,7 @@ const AdminLoginPage = () => {
             <strong>Username:</strong> Admin
           </p>
           <p className="text-xs text-blue-300">
-            <strong>Password:</strong> admin@jayant.com
+            <strong>Password:</strong> admin123
           </p>
         </div>
       </div>

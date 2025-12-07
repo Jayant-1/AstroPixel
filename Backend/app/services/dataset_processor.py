@@ -118,6 +118,7 @@ class DatasetProcessor:
         import gc
         import time
         from sqlalchemy.exc import OperationalError
+        import shutil
         
         # Create new database session for background task
         from app.database import SessionLocal
@@ -155,6 +156,23 @@ class DatasetProcessor:
             file_size_mb = file_path.stat().st_size / (1024 * 1024)
             
             logger.info(f"Memory check: {available_mb:.0f}MB available, file size: {file_size_mb:.0f}MB")
+
+            # Check available disk space BEFORE starting
+            disk = shutil.disk_usage(str(file_path.parent))
+            available_disk_mb = disk.free / (1024 * 1024)
+            min_disk_required_mb = file_size_mb * 2  # Require at least 2x file size for temp/tiles
+            logger.info(f"Disk check: {available_disk_mb:.0f}MB available, file size: {file_size_mb:.0f}MB")
+            if available_disk_mb < min_disk_required_mb:
+                logger.error(f"Insufficient disk space for tile generation!")
+                dataset.processing_status = "failed"
+                dataset.processing_progress = 0
+                dataset.extra_metadata = dataset.extra_metadata or {}
+                dataset.extra_metadata['error'] = f"Insufficient disk space. Available: {available_disk_mb:.0f}MB, Required: ~{min_disk_required_mb:.0f}MB. Try a smaller file or free up space."
+                safe_commit()
+                return
+
+            # Log memory usage before tile generation
+            logger.info(f"Memory usage before tile gen: {psutil.Process().memory_info().rss / (1024*1024):.2f} MB")
             
             # For PSB/PSD files, we need at least 3x file size in RAM
             # For TIFF files with rasterio streaming, we need less
@@ -227,12 +245,14 @@ class DatasetProcessor:
             def update_progress(progress: int):
                 dataset.processing_progress = progress
                 safe_commit()
-            import shutil
                 logger.info(f"Dataset {dataset_id} progress: {progress}%")
 
             success = tile_gen.generate_tiles(progress_callback=update_progress)
 
             if success:
+                # Log memory usage after tile generation
+                logger.info(f"Memory usage after tile gen: {psutil.Process().memory_info().rss / (1024*1024):.2f} MB")
+                
                 # Mark as completed FIRST and commit immediately
                 dataset.processing_status = "completed"
                 dataset.processing_progress = 100
@@ -247,23 +267,6 @@ class DatasetProcessor:
                     logger.error(f"Failed to generate preview: {e}")
                 
                 # Upload to cloud storage if enabled (Cloudflare R2)
-
-                # Check available disk space BEFORE starting
-                disk = shutil.disk_usage(str(file_path.parent))
-                available_disk_mb = disk.free / (1024 * 1024)
-                min_disk_required_mb = file_size_mb * 2  # Require at least 2x file size for temp/tiles
-                logger.info(f"Disk check: {available_disk_mb:.0f}MB available, file size: {file_size_mb:.0f}MB")
-                if available_disk_mb < min_disk_required_mb:
-                    logger.error(f"Insufficient disk space for tile generation!")
-                    dataset.processing_status = "failed"
-                    dataset.processing_progress = 0
-                    dataset.extra_metadata = dataset.extra_metadata or {}
-                    dataset.extra_metadata['error'] = f"Insufficient disk space. Available: {available_disk_mb:.0f}MB, Required: ~{min_disk_required_mb:.0f}MB. Try a smaller file or free up space."
-                    safe_commit()
-                    return
-
-                # Log memory usage before tile generation
-                logger.info(f"Memory usage before tile gen: {psutil.Process().memory_info().rss / (1024*1024):.2f} MB")
                 logger.info(f"Cloud storage enabled: {cloud_storage.enabled}, Bucket: {cloud_storage.bucket_name}, Public URL: {cloud_storage.public_url}")
                 if cloud_storage.enabled:
                     logger.info(f"📤 Uploading tiles to R2 for dataset {dataset_id}")
@@ -286,12 +289,7 @@ class DatasetProcessor:
                         
                         # Save dataset metadata to R2
                         safe_commit()
-
-                # Log memory usage after gc
-                logger.info(f"Memory usage after gc: {psutil.Process().memory_info().rss / (1024*1024):.2f} MB")
                         db.refresh(dataset)
-                # Log memory usage after tile generation
-                logger.info(f"Memory usage after tile gen: {psutil.Process().memory_info().rss / (1024*1024):.2f} MB")
                         DatasetProcessor._save_dataset_metadata_to_cloud(dataset)
                         
                     except Exception as e:
