@@ -224,6 +224,9 @@ const ViewerCanvas = ({
         loadingTilesRef.current.add(event.tile);
         // Show loading immediately when tiles start loading
         setTilesLoading(true);
+        // Clear any pending hide timers when new tiles start loading
+        clearTimeout(loadingDebounceTimer);
+        clearTimeout(loadingFallbackTimer);
       }
     });
 
@@ -232,15 +235,16 @@ const ViewerCanvas = ({
         loadingTilesRef.current.delete(event.tile);
       }
 
-      // Debounce the loading state change to prevent flickering
-      // Shorter debounce for better responsiveness
+      // Use longer debounce (1s) to wait for all tiles to finish loading
+      // Only hide when no tiles are loading and debounce expires
       clearTimeout(loadingDebounceTimer);
       loadingDebounceTimer = setTimeout(() => {
         if (loadingTilesRef.current.size === 0) {
+          console.log("✅ All tiles loaded, hiding loader");
           setTilesLoading(false);
           initialLoadComplete = true;
         }
-      }, 200);
+      }, 1000);
     });
 
     viewerInstance.addHandler("tile-load-failed", (event) => {
@@ -248,30 +252,45 @@ const ViewerCanvas = ({
         loadingTilesRef.current.delete(event.tile);
       }
 
-      // Debounce the loading state change
+      // Use longer debounce (1s) even for failed tiles
       clearTimeout(loadingDebounceTimer);
       loadingDebounceTimer = setTimeout(() => {
         if (loadingTilesRef.current.size === 0) {
+          console.log("✅ Tile loading complete (with failures), hiding loader");
           setTilesLoading(false);
         }
-      }, 200);
+      }, 1000);
     });
 
     // Show loading on viewport changes (pan/zoom) when new tiles need to load
     viewerInstance.addHandler("animation-start", () => {
       if (loadingTilesRef.current.size > 0) {
+        console.log("🔄 Pan/zoom detected, showing loader again");
         setTilesLoading(true);
       }
     });
 
-    // Fallback: if no tile events fire (cached tiles), hide loader after a short delay once open
+    // When animation finishes, if no tiles are loading, hide the loader
+    viewerInstance.addHandler("animation-finish", () => {
+      clearTimeout(loadingDebounceTimer);
+      loadingDebounceTimer = setTimeout(() => {
+        if (loadingTilesRef.current.size === 0) {
+          console.log("✅ Animation finished, all tiles loaded - hiding loader");
+          setTilesLoading(false);
+        }
+      }, 800);
+    });
+
+    // Fallback: if no tile events fire (cached tiles), hide loader after a delay once open
     viewerInstance.addHandler("open", () => {
       clearTimeout(loadingFallbackTimer);
       loadingFallbackTimer = setTimeout(() => {
         if (loadingTilesRef.current.size === 0) {
+          console.log("✅ Viewer opened, no pending tiles - hiding loader");
           setTilesLoading(false);
         }
-      }, 1200);
+      }, 1500);
+    });
     });
 
     viewerInstance.addHandler("open-failed", (event) => {
