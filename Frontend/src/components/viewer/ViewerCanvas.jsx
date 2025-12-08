@@ -221,7 +221,7 @@ const ViewerCanvas = ({
     let lastTileEventTime = Date.now();
     let backendStatusCheckTimer = null;
 
-    // Function to check backend tile fetch status
+    // Function to check backend tile fetch status with continuous polling
     const checkBackendTileStatus = async () => {
       try {
         const response = await fetch(
@@ -236,10 +236,23 @@ const ViewerCanvas = ({
             console.log("✅ Backend confirmed all tiles ready, hiding loader");
             setTilesLoading(false);
             return true;
+          } else {
+            // Backend not ready yet, keep polling
+            console.log(`⏳ Backend status: ${status.processing_status}, polling again in 500ms...`);
+            if (backendStatusCheckTimer) clearTimeout(backendStatusCheckTimer);
+            backendStatusCheckTimer = setTimeout(() => {
+              checkBackendTileStatus();
+            }, 500);
+            return false;
           }
         }
       } catch (error) {
         console.warn("⚠️ Could not check backend tile status:", error);
+        // On error, retry after 1 second
+        if (backendStatusCheckTimer) clearTimeout(backendStatusCheckTimer);
+        backendStatusCheckTimer = setTimeout(() => {
+          checkBackendTileStatus();
+        }, 1000);
       }
       return false;
     };
@@ -277,16 +290,8 @@ const ViewerCanvas = ({
           console.log(
             "📋 All frontend tiles loaded, checking backend status..."
           );
-          const backendReady = await checkBackendTileStatus();
-
-          // If backend not ready, poll again in 500ms
-          if (!backendReady) {
-            console.log("⏳ Backend still processing, will check again...");
-            if (backendStatusCheckTimer) clearTimeout(backendStatusCheckTimer);
-            backendStatusCheckTimer = setTimeout(() => {
-              checkBackendTileStatus();
-            }, 500);
-          }
+          // Start continuous polling until backend confirms ready
+          await checkBackendTileStatus();
         }
       }, 800);
     });
@@ -307,16 +312,8 @@ const ViewerCanvas = ({
           console.log(
             "📋 Tile loading complete (with failures), checking backend status..."
           );
-          const backendReady = await checkBackendTileStatus();
-
-          // If backend not ready, poll again in 500ms
-          if (!backendReady) {
-            console.log("⏳ Backend still processing, will check again...");
-            if (backendStatusCheckTimer) clearTimeout(backendStatusCheckTimer);
-            backendStatusCheckTimer = setTimeout(() => {
-              checkBackendTileStatus();
-            }, 500);
-          }
+          // Start continuous polling until backend confirms ready
+          await checkBackendTileStatus();
         }
       }, 800);
     });
@@ -329,30 +326,32 @@ const ViewerCanvas = ({
       }
     });
 
-    // When animation finishes, if no tiles are loading, hide the loader
+    // When animation finishes, if no tiles are loading, check backend status
     viewerInstance.addHandler("animation-finish", () => {
       console.log(
         `📍 Animation finished. Pending tiles: ${loadingTilesRef.current.size}`
       );
       clearTimeout(loadingDebounceTimer);
-      loadingDebounceTimer = setTimeout(() => {
+      loadingDebounceTimer = setTimeout(async () => {
         if (loadingTilesRef.current.size === 0) {
           console.log(
-            "✅ Animation finished, all tiles loaded - hiding loader"
+            "📋 Animation finished, all tiles loaded - checking backend status..."
           );
-          setTilesLoading(false);
+          // Check backend status before hiding
+          await checkBackendTileStatus();
         }
       }, 600);
     });
 
-    // Fallback: if no tile events fire (cached tiles), hide loader after a delay once open
+    // Fallback: if no tile events fire (cached tiles), check backend status after delay
     viewerInstance.addHandler("open", () => {
       console.log("🎬 Viewer opened, starting fallback timer");
       clearTimeout(loadingFallbackTimer);
-      loadingFallbackTimer = setTimeout(() => {
+      loadingFallbackTimer = setTimeout(async () => {
         if (loadingTilesRef.current.size === 0) {
-          console.log("✅ Viewer opened, no pending tiles - hiding loader");
-          setTilesLoading(false);
+          console.log("📋 Viewer opened, no pending tiles - checking backend status...");
+          // Check backend status before hiding
+          await checkBackendTileStatus();
         }
       }, 1000);
     });

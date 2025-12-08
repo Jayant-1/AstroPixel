@@ -215,11 +215,8 @@ const ComparisonView = ({
               "📋 All frontend tiles loaded in both viewers, checking backend status..."
             );
 
-            // Check backend status for the primary dataset
-            const backendReady = await checkBackendTilesStatus();
-            if (!backendReady) {
-              console.log("⏳ Backend still processing, will check again...");
-            }
+            // Start continuous polling until backend confirms ready
+            await checkBackendTilesStatus();
           }
         }, 800);
       });
@@ -241,17 +238,14 @@ const ComparisonView = ({
               "📋 Tile loading complete (with failures) in both viewers, checking backend status..."
             );
 
-            // Check backend status for the primary dataset
-            const backendReady = await checkBackendTilesStatus();
-            if (!backendReady) {
-              console.log("⏳ Backend still processing, will check again...");
-            }
+            // Start continuous polling until backend confirms ready
+            await checkBackendTilesStatus();
           }
         }, 800);
       });
     };
 
-    // Function to check backend tile fetch status for primary dataset
+    // Function to check backend tile fetch status for primary dataset with continuous polling
     const checkBackendTilesStatus = async () => {
       try {
         const response = await fetch(
@@ -266,10 +260,21 @@ const ComparisonView = ({
             console.log("✅ Backend confirmed all tiles ready, hiding loader");
             setTilesLoading(false);
             return true;
+          } else {
+            // Backend not ready yet, keep polling
+            console.log(`⏳ Backend status: ${status.processing_status}, polling again in 500ms...`);
+            setTimeout(() => {
+              checkBackendTilesStatus();
+            }, 500);
+            return false;
           }
         }
       } catch (error) {
         console.warn("⚠️ Could not check backend tile status:", error);
+        // On error, retry after 1 second
+        setTimeout(() => {
+          checkBackendTilesStatus();
+        }, 1000);
       }
       return false;
     };
