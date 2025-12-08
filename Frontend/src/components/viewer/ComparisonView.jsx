@@ -17,7 +17,8 @@ const ComparisonView = ({
   setSyncEnabled,
 }) => {
   const [viewersReady, setViewersReady] = useState(false);
-  const [tilesLoading, setTilesLoading] = useState(false);
+  const [tilesLoading1, setTilesLoading1] = useState(false);
+  const [tilesLoading2, setTilesLoading2] = useState(false);
 
   const viewer1Ref = useRef(null);
   const viewer2Ref = useRef(null);
@@ -134,7 +135,8 @@ const ComparisonView = ({
 
       // Clear tile loading state
       loadingTilesRef.current = { viewer1: new Set(), viewer2: new Set() };
-      setTilesLoading(false);
+      setTilesLoading1(false);
+      setTilesLoading2(false);
       if (loadingDebounceTimer.current) {
         clearTimeout(loadingDebounceTimer.current);
       }
@@ -186,10 +188,13 @@ const ComparisonView = ({
 
     // Track tile loading for both viewers
     const setupTileLoadingHandlers = (viewer, viewerName) => {
+      const setLoadingState =
+        viewerName === "viewer1" ? setTilesLoading1 : setTilesLoading2;
+
       viewer.addHandler("tile-loading", (event) => {
         if (event.tile) {
           loadingTilesRef.current[viewerName].add(event.tile);
-          setTilesLoading(true);
+          setLoadingState(true);
           if (loadingDebounceTimer.current) {
             clearTimeout(loadingDebounceTimer.current);
           }
@@ -206,7 +211,7 @@ const ComparisonView = ({
             `✅ ${viewerName} tile loaded. Remaining: ${loadingTilesRef.current[viewerName].size}`
           );
           // Stop loading animation as soon as first tile starts rendering
-          setTilesLoading(false);
+          setLoadingState(false);
         }
       });
 
@@ -216,70 +221,10 @@ const ComparisonView = ({
           console.log(
             `⚠️ ${viewerName} tile failed. Remaining: ${loadingTilesRef.current[viewerName].size}`
           );
+          // Hide loading for this viewer when tiles fail
+          setLoadingState(false);
         }
-
-        clearTimeout(loadingDebounceTimer.current);
-        loadingDebounceTimer.current = setTimeout(async () => {
-          const viewer1Tiles = loadingTilesRef.current.viewer1.size;
-          const viewer2Tiles = loadingTilesRef.current.viewer2.size;
-          if (viewer1Tiles === 0 && viewer2Tiles === 0) {
-            console.log(
-              "📋 Tile loading complete (with failures) in both viewers, checking backend status..."
-            );
-
-            // Start continuous polling until backend confirms ready
-            await checkBackendTilesStatus();
-          }
-        }, 800);
       });
-    };
-
-    // Function to check backend tile fetch status for primary dataset with continuous polling
-    const checkBackendTilesStatus = async () => {
-      // Prevent multiple concurrent polling loops
-      if (isCheckingBackendStatus.current) {
-        console.log("⚠️ Backend status check already in progress, skipping...");
-        return;
-      }
-
-      isCheckingBackendStatus.current = true;
-
-      try {
-        const response = await fetch(
-          `${API_BASE_URL}/api/datasets/${dataset.id}/tile-status`
-        );
-        if (response.ok) {
-          const status = await response.json();
-          console.log(`🔍 Backend tile status: ${status.message}`, status);
-
-          // Only hide loader when backend confirms tiles are ready
-          if (status.tiles_ready) {
-            console.log("✅ Backend confirmed all tiles ready, hiding loader");
-            setTilesLoading(false);
-            isCheckingBackendStatus.current = false;
-            return true;
-          } else {
-            // Backend not ready yet, keep polling
-            console.log(
-              `⏳ Backend status: ${status.processing_status}, polling again in 500ms...`
-            );
-            setTimeout(() => {
-              isCheckingBackendStatus.current = false;
-              checkBackendTilesStatus();
-            }, 500);
-            return false;
-          }
-        }
-      } catch (error) {
-        console.warn("⚠️ Could not check backend tile status:", error);
-        // On error, retry after 1 second
-        setTimeout(() => {
-          isCheckingBackendStatus.current = false;
-          checkBackendTilesStatus();
-        }, 1000);
-      }
-      isCheckingBackendStatus.current = false;
-      return false;
     };
 
     if (viewer1Ref.current) {
@@ -547,6 +492,8 @@ const ComparisonView = ({
             className="w-full h-full"
             suppressHydrationWarning
           />
+          {/* Loading overlay for viewer 1 */}
+          <TileLoadingOverlay isLoading={tilesLoading1} />
         </div>
 
         {/* Right Viewer Container - only visible in side-by-side mode */}
@@ -563,6 +510,8 @@ const ComparisonView = ({
             className="w-full h-full"
             suppressHydrationWarning
           />
+          {/* Loading overlay for viewer 2 */}
+          <TileLoadingOverlay isLoading={tilesLoading2} />
         </div>
 
         {/* Side-by-side Labels */}
@@ -591,9 +540,6 @@ const ComparisonView = ({
           </div>
         )}
       </div>
-
-      {/* Tile loading overlay */}
-      <TileLoadingOverlay isLoading={tilesLoading} />
     </div>
   );
 };
