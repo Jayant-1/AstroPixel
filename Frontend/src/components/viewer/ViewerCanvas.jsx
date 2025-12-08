@@ -218,25 +218,30 @@ const ViewerCanvas = ({
     let loadingDebounceTimer = null;
     let initialLoadComplete = false;
     let loadingFallbackTimer = null;
+    let lastTileEventTime = Date.now();
 
     viewerInstance.addHandler("tile-loading", (event) => {
       if (event.tile) {
         loadingTilesRef.current.add(event.tile);
+        lastTileEventTime = Date.now();
         // Show loading immediately when tiles start loading
         setTilesLoading(true);
         // Clear any pending hide timers when new tiles start loading
         clearTimeout(loadingDebounceTimer);
         clearTimeout(loadingFallbackTimer);
+        console.log(`📥 Tile loading started. Pending: ${loadingTilesRef.current.size}`);
       }
     });
 
     viewerInstance.addHandler("tile-loaded", (event) => {
       if (event.tile) {
         loadingTilesRef.current.delete(event.tile);
+        lastTileEventTime = Date.now();
+        console.log(`✅ Tile loaded. Remaining: ${loadingTilesRef.current.size}`);
       }
 
-      // Use longer debounce (1s) to wait for all tiles to finish loading
-      // Only hide when no tiles are loading and debounce expires
+      // Use debounce (800ms) to wait for all tiles to finish loading
+      // This is shorter to respond faster when all tiles are done
       clearTimeout(loadingDebounceTimer);
       loadingDebounceTimer = setTimeout(() => {
         if (loadingTilesRef.current.size === 0) {
@@ -244,22 +249,24 @@ const ViewerCanvas = ({
           setTilesLoading(false);
           initialLoadComplete = true;
         }
-      }, 1000);
+      }, 800);
     });
 
     viewerInstance.addHandler("tile-load-failed", (event) => {
       if (event.tile) {
         loadingTilesRef.current.delete(event.tile);
+        lastTileEventTime = Date.now();
+        console.log(`⚠️ Tile failed to load. Remaining: ${loadingTilesRef.current.size}`);
       }
 
-      // Use longer debounce (1s) even for failed tiles
+      // Use debounce even for failed tiles - same timing as successful loads
       clearTimeout(loadingDebounceTimer);
       loadingDebounceTimer = setTimeout(() => {
         if (loadingTilesRef.current.size === 0) {
           console.log("✅ Tile loading complete (with failures), hiding loader");
           setTilesLoading(false);
         }
-      }, 1000);
+      }, 800);
     });
 
     // Show loading on viewport changes (pan/zoom) when new tiles need to load
@@ -272,24 +279,26 @@ const ViewerCanvas = ({
 
     // When animation finishes, if no tiles are loading, hide the loader
     viewerInstance.addHandler("animation-finish", () => {
+      console.log(`📍 Animation finished. Pending tiles: ${loadingTilesRef.current.size}`);
       clearTimeout(loadingDebounceTimer);
       loadingDebounceTimer = setTimeout(() => {
         if (loadingTilesRef.current.size === 0) {
           console.log("✅ Animation finished, all tiles loaded - hiding loader");
           setTilesLoading(false);
         }
-      }, 800);
+      }, 600);
     });
 
     // Fallback: if no tile events fire (cached tiles), hide loader after a delay once open
     viewerInstance.addHandler("open", () => {
+      console.log("🎬 Viewer opened, starting fallback timer");
       clearTimeout(loadingFallbackTimer);
       loadingFallbackTimer = setTimeout(() => {
         if (loadingTilesRef.current.size === 0) {
           console.log("✅ Viewer opened, no pending tiles - hiding loader");
           setTilesLoading(false);
         }
-      }, 1500);
+      }, 1000);
     });
 
     viewerInstance.addHandler("open-failed", (event) => {

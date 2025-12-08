@@ -7,12 +7,11 @@ const TileLoadingOverlay = ({ isLoading }) => {
 
   useEffect(() => {
     if (isLoading) {
-      // Show overlay immediately
+      // Show overlay immediately when tiles start loading
       setVisible(true);
     } else {
-      // Delay hiding to show completion state briefly
-      const timeout = setTimeout(() => setVisible(false), 500);
-      return () => clearTimeout(timeout);
+      // Hide overlay immediately when all tiles are loaded
+      setVisible(false);
     }
   }, [isLoading]);
 
@@ -77,7 +76,7 @@ const TileLoadingOverlay = ({ isLoading }) => {
             Loading Tiles{dots}
           </h3>
           <p className="text-sm text-gray-400 max-w-xs">
-            Streaming high-resolution imagery from R2 cloud storage
+            Fetching high-resolution imagery from R2 storage
           </p>
         </div>
 
