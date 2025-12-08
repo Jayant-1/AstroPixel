@@ -295,20 +295,9 @@ const ViewerCanvas = ({
         console.log(
           `✅ Tile loaded. Remaining: ${loadingTilesRef.current.size}`
         );
+        // Stop loading animation as soon as first tile starts rendering
+        setTilesLoading(false);
       }
-
-      // Use debounce (800ms) to wait for all tiles to finish loading
-      // Then check backend status before hiding
-      clearTimeout(loadingDebounceTimer);
-      loadingDebounceTimer = setTimeout(async () => {
-        if (loadingTilesRef.current.size === 0) {
-          console.log(
-            "📋 All frontend tiles loaded, checking backend status..."
-          );
-          // Start continuous polling until backend confirms ready
-          await checkBackendTileStatus();
-        }
-      }, 800);
     });
 
     viewerInstance.addHandler("tile-load-failed", (event) => {

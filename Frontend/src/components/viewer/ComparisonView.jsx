@@ -205,21 +205,9 @@ const ComparisonView = ({
           console.log(
             `✅ ${viewerName} tile loaded. Remaining: ${loadingTilesRef.current[viewerName].size}`
           );
+          // Stop loading animation as soon as first tile starts rendering
+          setTilesLoading(false);
         }
-
-        clearTimeout(loadingDebounceTimer.current);
-        loadingDebounceTimer.current = setTimeout(async () => {
-          const viewer1Tiles = loadingTilesRef.current.viewer1.size;
-          const viewer2Tiles = loadingTilesRef.current.viewer2.size;
-          if (viewer1Tiles === 0 && viewer2Tiles === 0) {
-            console.log(
-              "📋 All frontend tiles loaded in both viewers, checking backend status..."
-            );
-
-            // Start continuous polling until backend confirms ready
-            await checkBackendTilesStatus();
-          }
-        }, 800);
       });
 
       viewer.addHandler("tile-load-failed", (event) => {
