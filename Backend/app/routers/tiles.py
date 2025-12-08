@@ -48,16 +48,17 @@ async def get_tile(
     - **y**: Tile Y coordinate
     - **format**: Image format (jpg, png, webp)
     """
-    # Check cache first for R2 datasets to avoid DB query
+    # Check cache first to avoid DB query on subsequent requests
     now = time()
     cache_key = dataset_id
     cached = _dataset_cache.get(cache_key)
     
-    # Use cache if valid and dataset is on R2
-    if cached and (now - cached[0]) < _cache_ttl and cached[1]:  # cached[1] = tiles_on_r2
+    # Use cache if valid (regardless of R2 status)
+    if cached and (now - cached[0]) < _cache_ttl:
         cache_bust = cached[4]  # cache_bust
         max_zoom = cached[2]
         tiles_on_r2 = cached[1]
+        tile_base_path = cached[3]
         
         # Validate zoom level from cache
         if z > max_zoom:
@@ -65,7 +66,7 @@ async def get_tile(
                 status_code=400, detail=f"Zoom level {z} exceeds maximum {max_zoom}"
             )
         
-        # Direct redirect to R2 - skip all DB/permission checks for cached R2 tiles
+        # If R2 is enabled and tiles are on R2, redirect
         if cloud_storage.enabled and cloud_storage.public_url and tiles_on_r2:
             tile_url = cloud_storage.get_tile_url(dataset_id, z, x, y, format, cache_bust)
             if tile_url:
@@ -77,6 +78,40 @@ async def get_tile(
                         "Access-Control-Allow-Origin": "*",
                     }
                 )
+        
+        # Otherwise serve from local tiles using cached path
+        if Path(tile_base_path).is_absolute():
+            tile_base = Path(tile_base_path)
+        else:
+            tile_base = settings.BASE_DIR / tile_base_path
+        
+        tile_path = tile_base / str(z) / str(x) / f"{y}.{format}"
+        
+        # If requested format doesn't exist, try fallback formats
+        if not tile_path.exists():
+            fallback_formats = ["png", "webp"] if format.lower() in ["jpg", "jpeg"] else ["jpg", "jpeg", "webp"] if format.lower() == "png" else ["png", "jpg", "jpeg"]
+            for fallback_format in fallback_formats:
+                fallback_path = tile_base / str(z) / str(x) / f"{y}.{fallback_format}"
+                if fallback_path.exists():
+                    tile_path = fallback_path
+                    format = fallback_format
+                    break
+            else:
+                raise HTTPException(status_code=404, detail=f"Tile {z}/{x}/{y} not found")
+        
+        media_type_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
+        return FileResponse(
+            tile_path,
+            media_type=media_type_map.get(format.lower(), f"image/{format}"),
+            headers={
+                "Cache-Control": "public, max-age=31536000, immutable",
+                "X-Tile-Status": "exists",
+                "X-Tile-Format": format,
+                "Access-Control-Allow-Origin": "*",
+                "Cross-Origin-Resource-Policy": "cross-origin",
+                "ETag": f'"{dataset_id}-{z}-{x}-{y}-{format}"',
+            },
+        )
     
     # Cache miss or local tiles - query database
     dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
