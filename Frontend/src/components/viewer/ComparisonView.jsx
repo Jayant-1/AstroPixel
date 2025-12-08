@@ -26,6 +26,7 @@ const ComparisonView = ({
   const syncHandlersRef = useRef(null);
   const loadingTilesRef = useRef({ viewer1: new Set(), viewer2: new Set() });
   let loadingDebounceTimer = useRef(null);
+  let isCheckingBackendStatus = useRef(false); // Flag to prevent multiple concurrent polling loops
 
   // Create tile source helper with cache busting
   const createTileSource = (ds) => {
@@ -247,6 +248,14 @@ const ComparisonView = ({
 
     // Function to check backend tile fetch status for primary dataset with continuous polling
     const checkBackendTilesStatus = async () => {
+      // Prevent multiple concurrent polling loops
+      if (isCheckingBackendStatus.current) {
+        console.log("⚠️ Backend status check already in progress, skipping...");
+        return;
+      }
+
+      isCheckingBackendStatus.current = true;
+
       try {
         const response = await fetch(
           `${API_BASE_URL}/api/datasets/${dataset.id}/tile-status`
@@ -259,6 +268,7 @@ const ComparisonView = ({
           if (status.tiles_ready) {
             console.log("✅ Backend confirmed all tiles ready, hiding loader");
             setTilesLoading(false);
+            isCheckingBackendStatus.current = false;
             return true;
           } else {
             // Backend not ready yet, keep polling
@@ -266,6 +276,7 @@ const ComparisonView = ({
               `⏳ Backend status: ${status.processing_status}, polling again in 500ms...`
             );
             setTimeout(() => {
+              isCheckingBackendStatus.current = false;
               checkBackendTilesStatus();
             }, 500);
             return false;
@@ -275,9 +286,11 @@ const ComparisonView = ({
         console.warn("⚠️ Could not check backend tile status:", error);
         // On error, retry after 1 second
         setTimeout(() => {
+          isCheckingBackendStatus.current = false;
           checkBackendTilesStatus();
         }, 1000);
       }
+      isCheckingBackendStatus.current = false;
       return false;
     };
 

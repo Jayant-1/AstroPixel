@@ -220,9 +220,18 @@ const ViewerCanvas = ({
     let loadingFallbackTimer = null;
     let lastTileEventTime = Date.now();
     let backendStatusCheckTimer = null;
+    let isCheckingBackendStatus = false; // Flag to prevent multiple concurrent polling loops
 
     // Function to check backend tile fetch status with continuous polling
     const checkBackendTileStatus = async () => {
+      // Prevent multiple concurrent polling loops
+      if (isCheckingBackendStatus) {
+        console.log("⚠️ Backend status check already in progress, skipping...");
+        return;
+      }
+
+      isCheckingBackendStatus = true;
+
       try {
         const response = await fetch(
           `${API_BASE_URL}/api/datasets/${dataset.id}/tile-status`
@@ -235,6 +244,7 @@ const ViewerCanvas = ({
           if (status.tiles_ready) {
             console.log("✅ Backend confirmed all tiles ready, hiding loader");
             setTilesLoading(false);
+            isCheckingBackendStatus = false;
             return true;
           } else {
             // Backend not ready yet, keep polling
@@ -243,6 +253,7 @@ const ViewerCanvas = ({
             );
             if (backendStatusCheckTimer) clearTimeout(backendStatusCheckTimer);
             backendStatusCheckTimer = setTimeout(() => {
+              isCheckingBackendStatus = false;
               checkBackendTileStatus();
             }, 500);
             return false;
@@ -253,9 +264,11 @@ const ViewerCanvas = ({
         // On error, retry after 1 second
         if (backendStatusCheckTimer) clearTimeout(backendStatusCheckTimer);
         backendStatusCheckTimer = setTimeout(() => {
+          isCheckingBackendStatus = false;
           checkBackendTileStatus();
         }, 1000);
       }
+      isCheckingBackendStatus = false;
       return false;
     };
 
