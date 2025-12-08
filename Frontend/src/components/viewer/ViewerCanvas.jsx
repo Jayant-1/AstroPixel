@@ -75,6 +75,9 @@ const ViewerCanvas = ({
       }
     }
 
+    // Always show loading state while initializing a new dataset viewer
+    setTilesLoading(true);
+
     // Update showGrid tracking
     lastShowGridRef.current = viewerSettings.showGrid;
 
@@ -214,6 +217,7 @@ const ViewerCanvas = ({
     // Track tile loading for overlay - show loading animation when tiles are being fetched
     let loadingDebounceTimer = null;
     let initialLoadComplete = false;
+    let loadingFallbackTimer = null;
 
     viewerInstance.addHandler("tile-loading", (event) => {
       if (event.tile) {
@@ -258,6 +262,16 @@ const ViewerCanvas = ({
       if (loadingTilesRef.current.size > 0) {
         setTilesLoading(true);
       }
+    });
+
+    // Fallback: if no tile events fire (cached tiles), hide loader after a short delay once open
+    viewerInstance.addHandler("open", () => {
+      clearTimeout(loadingFallbackTimer);
+      loadingFallbackTimer = setTimeout(() => {
+        if (loadingTilesRef.current.size === 0) {
+          setTilesLoading(false);
+        }
+      }, 1200);
     });
 
     viewerInstance.addHandler("open-failed", (event) => {
@@ -331,6 +345,9 @@ const ViewerCanvas = ({
       // Clear any pending debounce timers
       if (loadingDebounceTimer) {
         clearTimeout(loadingDebounceTimer);
+      }
+      if (loadingFallbackTimer) {
+        clearTimeout(loadingFallbackTimer);
       }
 
       // Clear tile loading state
