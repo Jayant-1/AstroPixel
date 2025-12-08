@@ -1,5 +1,5 @@
 import { Check, LogIn, UploadCloud, X } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../services/api";
@@ -28,6 +28,15 @@ const FileUploader = ({ onUpload }) => {
   const [r2UploadProgress, setR2UploadProgress] = useState(0); // 0-100 for R2 upload
   const [statusMessage, setStatusMessage] = useState("");
   const [processingStatus, setProcessingStatus] = useState(null); // null, 'uploading', 'processing', 'uploading_r2', 'completed', 'failed'
+  const isMountedRef = useRef(true);
+
+  // Track mounted state to prevent state updates after unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const isLoading =
     processingStatus &&
@@ -86,13 +95,14 @@ const FileUploader = ({ onUpload }) => {
     setStatusMessage("Uploading file...");
 
     try {
-      // Stage 1: Upload file with progress tracking
+      // Upload file with progress tracking
       const response = await api.uploadDataset(
         file,
         name,
         description,
         category,
         (progressEvent) => {
+          if (!isMountedRef.current) return;
           const percentCompleted = Math.round(
             (progressEvent.loaded * 100) / progressEvent.total
           );
@@ -101,6 +111,7 @@ const FileUploader = ({ onUpload }) => {
         }
       );
 
+      if (!isMountedRef.current) return;
       setUploadProgress(100);
       setProcessingStatus("processing");
       setStatusMessage("Generating tiles...");
@@ -109,13 +120,15 @@ const FileUploader = ({ onUpload }) => {
       const dataset = await api.pollProcessingStatus(
         response.id,
         (progress, status, attempts) => {
+          if (!isMountedRef.current) return;
+          
           const elapsedMinutes = Math.floor((attempts * 3) / 60);
           const elapsedSeconds = (attempts * 3) % 60;
           const timeStr =
             elapsedMinutes > 0
               ? `${elapsedMinutes}m ${elapsedSeconds}s`
               : `${elapsedSeconds}s`;
-          
+
           // Estimate stage based on progress
           if (progress < 50) {
             // Stage 2: Tile generation (0-50% of total progress)
@@ -137,6 +150,8 @@ const FileUploader = ({ onUpload }) => {
         }
       );
 
+      if (!isMountedRef.current) return;
+      
       // Success!
       setSuccess(true);
       setProcessingProgress(100);
@@ -144,10 +159,13 @@ const FileUploader = ({ onUpload }) => {
       setProcessingStatus("completed");
       setStatusMessage("Upload complete! Tiles are ready from R2.");
 
-      if (onUpload) onUpload(dataset);
+      if (onUpload) {
+        onUpload(dataset);
+      }
 
-      // Reset form after delay
+      // Reset form after delay only if still mounted
       setTimeout(() => {
+        if (!isMountedRef.current) return;
         setFile(null);
         setName("");
         setDescription("");

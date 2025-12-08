@@ -62,8 +62,17 @@ const ViewerCanvas = ({
     // IMPORTANT: Destroy existing viewer FIRST before creating new one
     if (viewerRef.current) {
       console.log("🧹 Destroying previous viewer before creating new one");
-      viewerRef.current.destroy();
-      viewerRef.current = null;
+      try {
+        // Clear tile loading state before destroying viewer
+        loadingTilesRef.current.clear();
+        setTilesLoading(false);
+        
+        viewerRef.current.destroy();
+        viewerRef.current = null;
+      } catch (error) {
+        console.warn("⚠️ Error destroying viewer:", error);
+        viewerRef.current = null;
+      }
     }
 
     // Update showGrid tracking
@@ -79,7 +88,10 @@ const ViewerCanvas = ({
     // Clear existing viewer content before creating new one
     const container = document.getElementById("openseadragon-viewer");
     if (container) {
-      container.innerHTML = "";
+      // Use a safer method to clear content
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
     }
 
     // Calculate max zoom level based on image dimensions
@@ -199,26 +211,44 @@ const ViewerCanvas = ({
       if (onReadyRef.current) onReadyRef.current();
     });
 
-    // Track tile loading for overlay
+    // Track tile loading for overlay with debouncing
+    let loadingDebounceTimer = null;
+    
     viewerInstance.addHandler("tile-loading", (event) => {
-      loadingTilesRef.current.add(event.tile);
-      if (!tilesLoading) {
-        setTilesLoading(true);
+      if (event.tile) {
+        loadingTilesRef.current.add(event.tile);
+        if (!tilesLoading) {
+          setTilesLoading(true);
+        }
       }
     });
 
     viewerInstance.addHandler("tile-loaded", (event) => {
-      loadingTilesRef.current.delete(event.tile);
-      if (loadingTilesRef.current.size === 0) {
-        setTilesLoading(false);
+      if (event.tile) {
+        loadingTilesRef.current.delete(event.tile);
       }
+      
+      // Debounce the loading state change to prevent flickering
+      clearTimeout(loadingDebounceTimer);
+      loadingDebounceTimer = setTimeout(() => {
+        if (loadingTilesRef.current.size === 0) {
+          setTilesLoading(false);
+        }
+      }, 300);
     });
 
     viewerInstance.addHandler("tile-load-failed", (event) => {
-      loadingTilesRef.current.delete(event.tile);
-      if (loadingTilesRef.current.size === 0) {
-        setTilesLoading(false);
+      if (event.tile) {
+        loadingTilesRef.current.delete(event.tile);
       }
+      
+      // Debounce the loading state change
+      clearTimeout(loadingDebounceTimer);
+      loadingDebounceTimer = setTimeout(() => {
+        if (loadingTilesRef.current.size === 0) {
+          setTilesLoading(false);
+        }
+      }, 300);
     });
 
     viewerInstance.addHandler("open-failed", (event) => {
@@ -288,12 +318,29 @@ const ViewerCanvas = ({
     // Cleanup
     return () => {
       console.log("🧹 Cleaning up viewer instance for dataset:", dataset?.id);
-      if (svg && svg.parentNode) {
-        svg.parentNode.removeChild(svg);
+      
+      // Clear tile loading state
+      loadingTilesRef.current.clear();
+      setTilesLoading(false);
+      
+      // Safely remove SVG overlay
+      try {
+        if (svg && svg.parentNode) {
+          svg.parentNode.removeChild(svg);
+        }
+      } catch (error) {
+        console.warn("⚠️ Error removing SVG overlay:", error);
       }
-      if (viewerInstance) {
-        viewerInstance.destroy();
+      
+      // Safely destroy viewer
+      try {
+        if (viewerInstance) {
+          viewerInstance.destroy();
+        }
+      } catch (error) {
+        console.warn("⚠️ Error destroying viewer instance:", error);
       }
+      
       // Reset ALL refs so re-initialization happens cleanly
       viewerRef.current = null;
       initializedDatasetIdRef.current = null; // Reset to allow new dataset to initialize

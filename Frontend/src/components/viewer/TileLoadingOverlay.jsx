@@ -17,7 +17,7 @@ const TileLoadingOverlay = ({ isLoading }) => {
   if (!isLoading) return null;
 
   return (
-    <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm z-50 flex items-center justify-center">
+    <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm z-50 flex items-center justify-center pointer-events-none">
       <div className="flex flex-col items-center gap-4 p-8 bg-gray-800/90 rounded-xl border border-gray-700 shadow-2xl">
         {/* Animated loader icon */}
         <div className="relative">
@@ -37,18 +37,20 @@ const TileLoadingOverlay = ({ isLoading }) => {
 
         {/* Animated progress bar */}
         <div className="w-64 h-2 bg-gray-700 rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 animate-pulse" 
-               style={{ 
-                 width: "100%",
-                 animation: "shimmer 2s ease-in-out infinite"
-               }} 
+          <div
+            className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 animate-pulse"
+            style={{
+              width: "100%",
+              animation: "shimmer 2s ease-in-out infinite",
+            }}
           />
         </div>
       </div>
 
       <style jsx>{`
         @keyframes shimmer {
-          0%, 100% {
+          0%,
+          100% {
             opacity: 0.5;
             transform: translateX(-100%);
           }
