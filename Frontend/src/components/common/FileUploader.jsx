@@ -25,8 +25,9 @@ const FileUploader = ({ onUpload }) => {
   const [success, setSuccess] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0); // 0-100 for file upload
   const [processingProgress, setProcessingProgress] = useState(0); // 0-100 for tile generation
+  const [r2UploadProgress, setR2UploadProgress] = useState(0); // 0-100 for R2 upload
   const [statusMessage, setStatusMessage] = useState("");
-  const [processingStatus, setProcessingStatus] = useState(null); // null, 'uploading', 'processing', 'completed', 'failed'
+  const [processingStatus, setProcessingStatus] = useState(null); // null, 'uploading', 'processing', 'uploading_r2', 'completed', 'failed'
 
   const isLoading =
     processingStatus &&
@@ -80,11 +81,12 @@ const FileUploader = ({ onUpload }) => {
     setSuccess(false);
     setUploadProgress(0);
     setProcessingProgress(0);
+    setR2UploadProgress(0);
     setProcessingStatus("uploading");
-    setStatusMessage("Uploading file to R2...");
+    setStatusMessage("Uploading file...");
 
     try {
-      // Upload file with progress tracking
+      // Stage 1: Upload file with progress tracking
       const response = await api.uploadDataset(
         file,
         name,
@@ -95,33 +97,41 @@ const FileUploader = ({ onUpload }) => {
             (progressEvent.loaded * 100) / progressEvent.total
           );
           setUploadProgress(percentCompleted);
-          setStatusMessage(`Uploading file to R2... ${percentCompleted}%`);
+          setStatusMessage(`Uploading file... ${percentCompleted}%`);
         }
       );
 
       setUploadProgress(100);
       setProcessingStatus("processing");
-      setStatusMessage("Processing tiles and uploading to R2...");
+      setStatusMessage("Generating tiles...");
 
-      // Poll for processing status with progress updates (no timeout - waits until done)
+      // Stage 2 & 3: Poll for processing status with progress updates (no timeout - waits until done)
       const dataset = await api.pollProcessingStatus(
         response.id,
         (progress, status, attempts) => {
-          setProcessingProgress(progress);
-          setProcessingStatus(status);
           const elapsedMinutes = Math.floor((attempts * 3) / 60);
           const elapsedSeconds = (attempts * 3) % 60;
           const timeStr =
             elapsedMinutes > 0
               ? `${elapsedMinutes}m ${elapsedSeconds}s`
               : `${elapsedSeconds}s`;
-          if (progress > 0) {
+          
+          // Estimate stage based on progress
+          if (progress < 50) {
+            // Stage 2: Tile generation (0-50% of total progress)
+            setProcessingProgress(progress * 2);
+            setProcessingStatus("processing");
             setStatusMessage(
-              `Processing tiles and uploading to R2... ${progress}% (${timeStr})`
+              `Generating tiles... ${Math.round(progress * 2)}% (${timeStr})`
             );
           } else {
+            // Stage 3: R2 upload (50-100% of total progress)
+            setProcessingProgress(100);
+            const r2Progress = (progress - 50) * 2;
+            setR2UploadProgress(r2Progress);
+            setProcessingStatus("uploading_r2");
             setStatusMessage(
-              `Processing tiles and uploading to R2... (${timeStr})`
+              `Uploading tiles to R2... ${Math.round(r2Progress)}% (${timeStr})`
             );
           }
         }
@@ -130,6 +140,7 @@ const FileUploader = ({ onUpload }) => {
       // Success!
       setSuccess(true);
       setProcessingProgress(100);
+      setR2UploadProgress(100);
       setProcessingStatus("completed");
       setStatusMessage("Upload complete! Tiles are ready from R2.");
 
@@ -144,6 +155,7 @@ const FileUploader = ({ onUpload }) => {
         setSuccess(false);
         setUploadProgress(0);
         setProcessingProgress(0);
+        setR2UploadProgress(0);
         setStatusMessage("");
         setProcessingStatus(null);
       }, 3000);
@@ -166,6 +178,7 @@ const FileUploader = ({ onUpload }) => {
     setSuccess(false);
     setUploadProgress(0);
     setProcessingProgress(0);
+    setR2UploadProgress(0);
     setStatusMessage("");
     setProcessingStatus(null);
   };
@@ -282,33 +295,49 @@ const FileUploader = ({ onUpload }) => {
                 <p className="text-sm text-blue-400">{statusMessage}</p>
               </div>
 
-              {/* Upload Progress Bar */}
+              {/* Stage 1: Upload Progress Bar - Blue Gradient */}
               {processingStatus === "uploading" && uploadProgress > 0 && (
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs text-gray-400">
-                    <span>Uploading to R2</span>
+                    <span>📤 Stage 1: Uploading File</span>
                     <span>{uploadProgress}%</span>
                   </div>
                   <div className="w-full bg-gray-700 rounded-full h-2.5 overflow-hidden">
                     <div
-                      className="bg-gradient-to-r from-purple-500 via-pink-500 to-fuchsia-500 h-full transition-all duration-300 ease-out"
+                      className="bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-400 h-full transition-all duration-300 ease-out shadow-lg shadow-blue-500/50"
                       style={{ width: `${uploadProgress}%` }}
                     />
                   </div>
                 </div>
               )}
 
-              {/* Processing Progress Bar */}
+              {/* Stage 2: Processing Progress Bar - Green Gradient */}
               {processingStatus === "processing" && processingProgress > 0 && (
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs text-gray-400">
-                    <span>Generating Tiles</span>
+                    <span>⚙️ Stage 2: Generating Tiles</span>
                     <span>{processingProgress}%</span>
                   </div>
                   <div className="w-full bg-gray-700 rounded-full h-2.5 overflow-hidden">
                     <div
-                      className="bg-gradient-to-r from-purple-500 to-pink-500 h-full transition-all duration-500 ease-out"
+                      className="bg-gradient-to-r from-green-600 via-green-500 to-emerald-400 h-full transition-all duration-500 ease-out shadow-lg shadow-green-500/50"
                       style={{ width: `${processingProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Stage 3: R2 Upload Progress Bar - Purple Gradient */}
+              {processingStatus === "uploading_r2" && r2UploadProgress > 0 && (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs text-gray-400">
+                    <span>☁️ Stage 3: Uploading to R2 Cloud</span>
+                    <span>{r2UploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-700 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-purple-600 via-purple-500 to-fuchsia-400 h-full transition-all duration-500 ease-out shadow-lg shadow-purple-500/50"
+                      style={{ width: `${r2UploadProgress}%` }}
                     />
                   </div>
                 </div>

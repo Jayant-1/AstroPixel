@@ -2,6 +2,7 @@ import OpenSeadragon from "openseadragon";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { API_BASE_URL } from "../../services/api";
+import TileLoadingOverlay from "./TileLoadingOverlay";
 
 const ViewerCanvas = ({
   dataset,
@@ -26,6 +27,8 @@ const ViewerCanvas = ({
     startPoint: null,
   });
   const { annotations, createAnnotation, hiddenAnnotations } = useApp();
+  const [tilesLoading, setTilesLoading] = useState(false);
+  const loadingTilesRef = useRef(new Set());
 
   // Track settings state for viewer configuration
   const [viewerSettings, setViewerSettings] = useState({
@@ -194,6 +197,28 @@ const ViewerCanvas = ({
       console.log("✅ Viewer opened successfully");
       initializedDatasetIdRef.current = dataset.id;
       if (onReadyRef.current) onReadyRef.current();
+    });
+
+    // Track tile loading for overlay
+    viewerInstance.addHandler("tile-loading", (event) => {
+      loadingTilesRef.current.add(event.tile);
+      if (!tilesLoading) {
+        setTilesLoading(true);
+      }
+    });
+
+    viewerInstance.addHandler("tile-loaded", (event) => {
+      loadingTilesRef.current.delete(event.tile);
+      if (loadingTilesRef.current.size === 0) {
+        setTilesLoading(false);
+      }
+    });
+
+    viewerInstance.addHandler("tile-load-failed", (event) => {
+      loadingTilesRef.current.delete(event.tile);
+      if (loadingTilesRef.current.size === 0) {
+        setTilesLoading(false);
+      }
     });
 
     viewerInstance.addHandler("open-failed", (event) => {
@@ -908,6 +933,9 @@ const ViewerCanvas = ({
           </span>
         </div>
       )}
+
+      {/* Tile loading overlay */}
+      <TileLoadingOverlay isLoading={tilesLoading} />
 
       {/* Loading overlay */}
       {!viewer && (
