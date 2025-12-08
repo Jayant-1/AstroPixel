@@ -66,7 +66,7 @@ const ViewerCanvas = ({
         // Clear tile loading state before destroying viewer
         loadingTilesRef.current.clear();
         setTilesLoading(false);
-        
+
         viewerRef.current.destroy();
         viewerRef.current = null;
       } catch (error) {
@@ -211,15 +211,15 @@ const ViewerCanvas = ({
       if (onReadyRef.current) onReadyRef.current();
     });
 
-    // Track tile loading for overlay with debouncing
+    // Track tile loading for overlay - show loading animation when tiles are being fetched
     let loadingDebounceTimer = null;
-    
+    let initialLoadComplete = false;
+
     viewerInstance.addHandler("tile-loading", (event) => {
       if (event.tile) {
         loadingTilesRef.current.add(event.tile);
-        if (!tilesLoading) {
-          setTilesLoading(true);
-        }
+        // Show loading immediately when tiles start loading
+        setTilesLoading(true);
       }
     });
 
@@ -227,28 +227,37 @@ const ViewerCanvas = ({
       if (event.tile) {
         loadingTilesRef.current.delete(event.tile);
       }
-      
+
       // Debounce the loading state change to prevent flickering
+      // Shorter debounce for better responsiveness
       clearTimeout(loadingDebounceTimer);
       loadingDebounceTimer = setTimeout(() => {
         if (loadingTilesRef.current.size === 0) {
           setTilesLoading(false);
+          initialLoadComplete = true;
         }
-      }, 300);
+      }, 200);
     });
 
     viewerInstance.addHandler("tile-load-failed", (event) => {
       if (event.tile) {
         loadingTilesRef.current.delete(event.tile);
       }
-      
+
       // Debounce the loading state change
       clearTimeout(loadingDebounceTimer);
       loadingDebounceTimer = setTimeout(() => {
         if (loadingTilesRef.current.size === 0) {
           setTilesLoading(false);
         }
-      }, 300);
+      }, 200);
+    });
+
+    // Show loading on viewport changes (pan/zoom) when new tiles need to load
+    viewerInstance.addHandler("animation-start", () => {
+      if (loadingTilesRef.current.size > 0) {
+        setTilesLoading(true);
+      }
     });
 
     viewerInstance.addHandler("open-failed", (event) => {
@@ -318,11 +327,16 @@ const ViewerCanvas = ({
     // Cleanup
     return () => {
       console.log("🧹 Cleaning up viewer instance for dataset:", dataset?.id);
-      
+
+      // Clear any pending debounce timers
+      if (loadingDebounceTimer) {
+        clearTimeout(loadingDebounceTimer);
+      }
+
       // Clear tile loading state
       loadingTilesRef.current.clear();
       setTilesLoading(false);
-      
+
       // Safely remove SVG overlay
       try {
         if (svg && svg.parentNode) {
@@ -331,7 +345,7 @@ const ViewerCanvas = ({
       } catch (error) {
         console.warn("⚠️ Error removing SVG overlay:", error);
       }
-      
+
       // Safely destroy viewer
       try {
         if (viewerInstance) {
@@ -340,7 +354,7 @@ const ViewerCanvas = ({
       } catch (error) {
         console.warn("⚠️ Error destroying viewer instance:", error);
       }
-      
+
       // Reset ALL refs so re-initialization happens cleanly
       viewerRef.current = null;
       initializedDatasetIdRef.current = null; // Reset to allow new dataset to initialize
