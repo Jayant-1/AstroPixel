@@ -304,40 +304,6 @@ const FileUploader = ({ onUpload }) => {
                 <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
                 <p className="text-sm text-blue-400">{statusMessage}</p>
               </div>
-
-              {/* Stage 1: Upload Progress Bar - Blue Gradient */}
-              {processingStatus === "uploading" && uploadProgress > 0 && (
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-gray-400">
-                    <span>📤 Stage 1: Uploading File</span>
-                    <span>{uploadProgress}%</span>
-                  </div>
-                  <div className="w-full bg-gray-700 rounded-full h-2.5 overflow-hidden">
-                    <div
-                      className="bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-400 h-full transition-all duration-300 ease-out shadow-lg shadow-blue-500/50"
-                      style={{ width: `${uploadProgress}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Stage 2: Processing Progress Bar - Green Gradient */}
-              {processingStatus === "processing" && processingProgress > 0 && (
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-gray-400">
-                    <span>⚙️ Stage 2: Generating Tiles</span>
-                    <span>{processingProgress}%</span>
-                  </div>
-                  <div className="w-full bg-gray-700 rounded-full h-2.5 overflow-hidden">
-                    <div
-                      className="bg-gradient-to-r from-green-600 via-green-500 to-emerald-400 h-full transition-all duration-500 ease-out shadow-lg shadow-green-500/50"
-                      style={{ width: `${processingProgress}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Stage 3 progress bar intentionally removed per request */}
             </div>
           )}
 
