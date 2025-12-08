@@ -192,14 +192,18 @@ const ComparisonView = ({
           if (loadingDebounceTimer.current) {
             clearTimeout(loadingDebounceTimer.current);
           }
-          console.log(`📥 ${viewerName} tile loading started. Pending: ${loadingTilesRef.current[viewerName].size}`);
+          console.log(
+            `📥 ${viewerName} tile loading started. Pending: ${loadingTilesRef.current[viewerName].size}`
+          );
         }
       });
 
       viewer.addHandler("tile-loaded", (event) => {
         if (event.tile) {
           loadingTilesRef.current[viewerName].delete(event.tile);
-          console.log(`✅ ${viewerName} tile loaded. Remaining: ${loadingTilesRef.current[viewerName].size}`);
+          console.log(
+            `✅ ${viewerName} tile loaded. Remaining: ${loadingTilesRef.current[viewerName].size}`
+          );
         }
 
         clearTimeout(loadingDebounceTimer.current);
@@ -207,8 +211,10 @@ const ComparisonView = ({
           const viewer1Tiles = loadingTilesRef.current.viewer1.size;
           const viewer2Tiles = loadingTilesRef.current.viewer2.size;
           if (viewer1Tiles === 0 && viewer2Tiles === 0) {
-            console.log("📋 All frontend tiles loaded in both viewers, checking backend status...");
-            
+            console.log(
+              "📋 All frontend tiles loaded in both viewers, checking backend status..."
+            );
+
             // Check backend status for the primary dataset
             const backendReady = await checkBackendTilesStatus();
             if (!backendReady) {
@@ -221,7 +227,9 @@ const ComparisonView = ({
       viewer.addHandler("tile-load-failed", (event) => {
         if (event.tile) {
           loadingTilesRef.current[viewerName].delete(event.tile);
-          console.log(`⚠️ ${viewerName} tile failed. Remaining: ${loadingTilesRef.current[viewerName].size}`);
+          console.log(
+            `⚠️ ${viewerName} tile failed. Remaining: ${loadingTilesRef.current[viewerName].size}`
+          );
         }
 
         clearTimeout(loadingDebounceTimer.current);
@@ -229,8 +237,10 @@ const ComparisonView = ({
           const viewer1Tiles = loadingTilesRef.current.viewer1.size;
           const viewer2Tiles = loadingTilesRef.current.viewer2.size;
           if (viewer1Tiles === 0 && viewer2Tiles === 0) {
-            console.log("📋 Tile loading complete (with failures) in both viewers, checking backend status...");
-            
+            console.log(
+              "📋 Tile loading complete (with failures) in both viewers, checking backend status..."
+            );
+
             // Check backend status for the primary dataset
             const backendReady = await checkBackendTilesStatus();
             if (!backendReady) {
@@ -249,10 +259,7 @@ const ComparisonView = ({
         );
         if (response.ok) {
           const status = await response.json();
-          console.log(
-            `🔍 Backend tile status: ${status.message}`,
-            status
-          );
+          console.log(`🔍 Backend tile status: ${status.message}`, status);
 
           // Only hide loader when backend confirms tiles are ready
           if (status.tiles_ready) {

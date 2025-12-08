@@ -229,10 +229,7 @@ const ViewerCanvas = ({
         );
         if (response.ok) {
           const status = await response.json();
-          console.log(
-            `🔍 Backend tile status: ${status.message}`,
-            status
-          );
+          console.log(`🔍 Backend tile status: ${status.message}`, status);
 
           // Only hide loader when backend confirms tiles are ready (processing_status === "completed")
           if (status.tiles_ready) {
@@ -277,9 +274,11 @@ const ViewerCanvas = ({
       clearTimeout(loadingDebounceTimer);
       loadingDebounceTimer = setTimeout(async () => {
         if (loadingTilesRef.current.size === 0) {
-          console.log("📋 All frontend tiles loaded, checking backend status...");
+          console.log(
+            "📋 All frontend tiles loaded, checking backend status..."
+          );
           const backendReady = await checkBackendTileStatus();
-          
+
           // If backend not ready, poll again in 500ms
           if (!backendReady) {
             console.log("⏳ Backend still processing, will check again...");
@@ -309,7 +308,7 @@ const ViewerCanvas = ({
             "📋 Tile loading complete (with failures), checking backend status..."
           );
           const backendReady = await checkBackendTileStatus();
-          
+
           // If backend not ready, poll again in 500ms
           if (!backendReady) {
             console.log("⏳ Backend still processing, will check again...");
