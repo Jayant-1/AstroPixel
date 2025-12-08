@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 from pathlib import Path
 import logging
 from typing import Optional
+from functools import lru_cache
+from time import time
 
 from app.database import get_db
 from app.models import Dataset, User
@@ -17,6 +19,10 @@ from app.services.auth import get_current_user
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Simple cache for dataset metadata (id -> (timestamp, tiles_on_r2, max_zoom, tile_base_path))
+_dataset_cache = {}
+_cache_ttl = 300  # 5 minutes
 
 
 @router.get("/tiles/{dataset_id}/{z}/{x}/{y}.{format}")
@@ -42,7 +48,37 @@ async def get_tile(
     - **y**: Tile Y coordinate
     - **format**: Image format (jpg, png, webp)
     """
-    # Get dataset
+    # Check cache first for R2 datasets to avoid DB query
+    now = time()
+    cache_key = dataset_id
+    cached = _dataset_cache.get(cache_key)
+    
+    # Use cache if valid and dataset is on R2
+    if cached and (now - cached[0]) < _cache_ttl and cached[1]:  # cached[1] = tiles_on_r2
+        cache_bust = cached[4]  # cache_bust
+        max_zoom = cached[2]
+        tiles_on_r2 = cached[1]
+        
+        # Validate zoom level from cache
+        if z > max_zoom:
+            raise HTTPException(
+                status_code=400, detail=f"Zoom level {z} exceeds maximum {max_zoom}"
+            )
+        
+        # Direct redirect to R2 - skip all DB/permission checks for cached R2 tiles
+        if cloud_storage.enabled and cloud_storage.public_url and tiles_on_r2:
+            tile_url = cloud_storage.get_tile_url(dataset_id, z, x, y, format, cache_bust)
+            if tile_url:
+                return RedirectResponse(
+                    url=tile_url,
+                    status_code=302,
+                    headers={
+                        "Cache-Control": "public, max-age=31536000, immutable",
+                        "Access-Control-Allow-Origin": "*",
+                    }
+                )
+    
+    # Cache miss or local tiles - query database
     dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
 
     if not dataset:
@@ -68,71 +104,28 @@ async def get_tile(
     elif dataset.created_at:
         cache_bust = str(int(dataset.created_at.timestamp()))
 
-    # If cloud storage (R2) is enabled, check if tiles have been uploaded
-    # Try metadata flag first, then check R2 directly for datasets synced from cloud
-    if cloud_storage.enabled and cloud_storage.public_url:
-        logger.info(f"🔍 Checking R2 for tile: dataset={dataset_id}, z={z}, x={x}, y={y}, format={format}")
-        
-        # Check if tiles have been uploaded to R2 (metadata flag)
-        tiles_on_r2 = (
-            dataset.extra_metadata and 
-            dataset.extra_metadata.get('tiles_uploaded_to_cloud') == True
-        )
-        logger.info(f"📋 Metadata flag 'tiles_uploaded_to_cloud': {tiles_on_r2}")
-        
-        # If flag not set, check R2 directly (for datasets synced from cloud)
-        if not tiles_on_r2:
-            logger.info(f"🔎 Metadata flag not set, checking R2 directly...")
-            tiles_on_r2 = cloud_storage.tile_exists(dataset_id, z, x, y, format)
-            logger.info(f"✓ R2 check result for {format}: {tiles_on_r2}")
-            
-            # If exact format not found, try alternatives
-            if not tiles_on_r2:
-                if format.lower() in ["jpg", "jpeg"]:
-                    logger.info(f"🔄 Trying PNG alternative...")
-                    tiles_on_r2 = cloud_storage.tile_exists(dataset_id, z, x, y, "png")
-                    if tiles_on_r2:
-                        format = "png"
-                        logger.info(f"✅ Found PNG alternative")
-                elif format.lower() == "png":
-                    logger.info(f"🔄 Trying JPG alternative...")
-                    tiles_on_r2 = cloud_storage.tile_exists(dataset_id, z, x, y, "jpg")
-                    if tiles_on_r2:
-                        format = "jpg"
-                        logger.info(f"✅ Found JPG alternative")
-        
-        if tiles_on_r2:
-            # Try proxying through backend to add CORS headers; fall back to redirect
-            key = f"tiles/{dataset_id}/{z}/{x}/{y}.{format}"
-            if cloud_storage.client:
-                try:
-                    obj = cloud_storage.client.get_object(Bucket=cloud_storage.bucket_name, Key=key)
-                    body = obj["Body"]
-                    content_type = obj.get("ContentType") or f"image/{format}"
-                    headers = {
-                        "Cache-Control": "public, max-age=31536000",
-                        "Access-Control-Allow-Origin": "*",
-                    }
-                    logger.info(f"🔗 Streaming tile from R2 via proxy: {key}")
-                    return StreamingResponse(body, media_type=content_type, headers=headers)
-                except Exception as e:
-                    logger.warning(f"Proxy stream from R2 failed for {key}: {e}; falling back to redirect")
-
-            tile_url = cloud_storage.get_tile_url(dataset_id, z, x, y, format, cache_bust)
-            if tile_url:
-                logger.info(f"🔗 Serving tile from R2 via redirect: {dataset_id}/{z}/{x}/{y}.{format} → {tile_url}")
-                return RedirectResponse(
-                    url=tile_url,
-                    status_code=302,
-                    headers={
-                        "Cache-Control": "public, max-age=31536000",
-                        "Access-Control-Allow-Origin": "*",
-                    }
-                )
-
-        # If we get here and cloud storage is enabled, log that we're falling back to local
-        if cloud_storage.enabled:
-            logger.warning(f"❌ Tile not found on R2 for dataset {dataset_id}/{z}/{x}/{y}.{format}, checking local storage")
+    # Check if tiles are on R2
+    tiles_on_r2 = (
+        dataset.extra_metadata and 
+        dataset.extra_metadata.get('tiles_uploaded_to_cloud') == True
+    )
+    
+    # Cache dataset metadata for future requests
+    _dataset_cache[cache_key] = (now, tiles_on_r2, dataset.max_zoom, dataset.tile_base_path, cache_bust)
+    
+    # If cloud storage (R2) is enabled and tiles are uploaded, serve from R2
+    if cloud_storage.enabled and cloud_storage.public_url and tiles_on_r2:
+        tile_url = cloud_storage.get_tile_url(dataset_id, z, x, y, format, cache_bust)
+        if tile_url:
+            logger.debug(f"⚡ Redirecting to R2: {dataset_id}/{z}/{x}/{y}.{format}")
+            return RedirectResponse(
+                url=tile_url,
+                status_code=302,
+                headers={
+                    "Cache-Control": "public, max-age=31536000, immutable",
+                    "Access-Control-Allow-Origin": "*",
+                }
+            )
 
     # Validate zoom level
     if z > dataset.max_zoom:
@@ -197,6 +190,7 @@ async def get_tile(
             "X-Tile-Format": format,  # Indicate actual format served
             "Access-Control-Allow-Origin": "*",  # Allow CORS for canvas export
             "Cross-Origin-Resource-Policy": "cross-origin",
+            "ETag": f'"{dataset_id}-{z}-{x}-{y}-{format}"',
         },
     )
 
