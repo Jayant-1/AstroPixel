@@ -397,7 +397,7 @@ const ViewerCanvas = ({
       setViewer(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataset?.id, viewerSettings.showGrid]); // Re-initialize only when dataset or showGrid changes
+  }, [dataset && dataset.id, viewerSettings.showGrid]); // Re-initialize only when dataset or showGrid changes
 
   // Separate effect for settings updates - runs independently of dataset changes
   useEffect(() => {
