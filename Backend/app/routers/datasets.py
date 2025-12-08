@@ -518,6 +518,51 @@ async def get_dataset(dataset_id: int, db: Session = Depends(get_db)):
     return dataset
 
 
+@router.get("/datasets/{dataset_id}/tile-status")
+async def get_tile_fetch_status(dataset_id: int, db: Session = Depends(get_db)):
+    """
+    Get the tile fetching status for a dataset
+    
+    Returns whether all tiles have been fetched and processed from R2/local storage.
+    Frontend uses this to determine when to stop showing loading animation.
+
+    - **dataset_id**: ID of the dataset
+    
+    Response:
+    - **tiles_ready**: Boolean indicating if all tiles are ready for rendering
+    - **processing_status**: Current processing status (pending, processing, completed, failed)
+    - **tiles_on_cloud**: Whether tiles have been uploaded to R2
+    - **message**: Human-readable status message
+    """
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    # Determine if tiles are ready
+    tiles_on_cloud = (
+        dataset.extra_metadata and 
+        dataset.extra_metadata.get('tiles_uploaded_to_cloud') == True
+    )
+    
+    tiles_ready = dataset.processing_status == "completed"
+    
+    status_message = {
+        "pending": "Waiting to process tiles",
+        "processing": "Processing tiles from source...",
+        "completed": "All tiles ready for rendering",
+        "failed": "Tile processing failed"
+    }.get(dataset.processing_status, "Unknown status")
+
+    return {
+        "tiles_ready": tiles_ready,
+        "processing_status": dataset.processing_status,
+        "tiles_on_cloud": tiles_on_cloud,
+        "message": status_message,
+        "dataset_id": dataset_id
+    }
+
+
 @router.put("/datasets/{dataset_id}", response_model=DatasetResponse)
 async def update_dataset(
     dataset_id: int, 

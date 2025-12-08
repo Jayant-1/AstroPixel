@@ -219,6 +219,33 @@ const ViewerCanvas = ({
     let initialLoadComplete = false;
     let loadingFallbackTimer = null;
     let lastTileEventTime = Date.now();
+    let backendStatusCheckTimer = null;
+
+    // Function to check backend tile fetch status
+    const checkBackendTileStatus = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/datasets/${dataset.id}/tile-status`
+        );
+        if (response.ok) {
+          const status = await response.json();
+          console.log(
+            `🔍 Backend tile status: ${status.message}`,
+            status
+          );
+
+          // Only hide loader when backend confirms tiles are ready (processing_status === "completed")
+          if (status.tiles_ready) {
+            console.log("✅ Backend confirmed all tiles ready, hiding loader");
+            setTilesLoading(false);
+            return true;
+          }
+        }
+      } catch (error) {
+        console.warn("⚠️ Could not check backend tile status:", error);
+      }
+      return false;
+    };
 
     viewerInstance.addHandler("tile-loading", (event) => {
       if (event.tile) {
@@ -229,7 +256,10 @@ const ViewerCanvas = ({
         // Clear any pending hide timers when new tiles start loading
         clearTimeout(loadingDebounceTimer);
         clearTimeout(loadingFallbackTimer);
-        console.log(`📥 Tile loading started. Pending: ${loadingTilesRef.current.size}`);
+        if (backendStatusCheckTimer) clearTimeout(backendStatusCheckTimer);
+        console.log(
+          `📥 Tile loading started. Pending: ${loadingTilesRef.current.size}`
+        );
       }
     });
 
@@ -237,17 +267,27 @@ const ViewerCanvas = ({
       if (event.tile) {
         loadingTilesRef.current.delete(event.tile);
         lastTileEventTime = Date.now();
-        console.log(`✅ Tile loaded. Remaining: ${loadingTilesRef.current.size}`);
+        console.log(
+          `✅ Tile loaded. Remaining: ${loadingTilesRef.current.size}`
+        );
       }
 
       // Use debounce (800ms) to wait for all tiles to finish loading
-      // This is shorter to respond faster when all tiles are done
+      // Then check backend status before hiding
       clearTimeout(loadingDebounceTimer);
-      loadingDebounceTimer = setTimeout(() => {
+      loadingDebounceTimer = setTimeout(async () => {
         if (loadingTilesRef.current.size === 0) {
-          console.log("✅ All tiles loaded, hiding loader");
-          setTilesLoading(false);
-          initialLoadComplete = true;
+          console.log("📋 All frontend tiles loaded, checking backend status...");
+          const backendReady = await checkBackendTileStatus();
+          
+          // If backend not ready, poll again in 500ms
+          if (!backendReady) {
+            console.log("⏳ Backend still processing, will check again...");
+            if (backendStatusCheckTimer) clearTimeout(backendStatusCheckTimer);
+            backendStatusCheckTimer = setTimeout(() => {
+              checkBackendTileStatus();
+            }, 500);
+          }
         }
       }, 800);
     });
@@ -256,15 +296,28 @@ const ViewerCanvas = ({
       if (event.tile) {
         loadingTilesRef.current.delete(event.tile);
         lastTileEventTime = Date.now();
-        console.log(`⚠️ Tile failed to load. Remaining: ${loadingTilesRef.current.size}`);
+        console.log(
+          `⚠️ Tile failed to load. Remaining: ${loadingTilesRef.current.size}`
+        );
       }
 
       // Use debounce even for failed tiles - same timing as successful loads
       clearTimeout(loadingDebounceTimer);
-      loadingDebounceTimer = setTimeout(() => {
+      loadingDebounceTimer = setTimeout(async () => {
         if (loadingTilesRef.current.size === 0) {
-          console.log("✅ Tile loading complete (with failures), hiding loader");
-          setTilesLoading(false);
+          console.log(
+            "📋 Tile loading complete (with failures), checking backend status..."
+          );
+          const backendReady = await checkBackendTileStatus();
+          
+          // If backend not ready, poll again in 500ms
+          if (!backendReady) {
+            console.log("⏳ Backend still processing, will check again...");
+            if (backendStatusCheckTimer) clearTimeout(backendStatusCheckTimer);
+            backendStatusCheckTimer = setTimeout(() => {
+              checkBackendTileStatus();
+            }, 500);
+          }
         }
       }, 800);
     });
@@ -279,11 +332,15 @@ const ViewerCanvas = ({
 
     // When animation finishes, if no tiles are loading, hide the loader
     viewerInstance.addHandler("animation-finish", () => {
-      console.log(`📍 Animation finished. Pending tiles: ${loadingTilesRef.current.size}`);
+      console.log(
+        `📍 Animation finished. Pending tiles: ${loadingTilesRef.current.size}`
+      );
       clearTimeout(loadingDebounceTimer);
       loadingDebounceTimer = setTimeout(() => {
         if (loadingTilesRef.current.size === 0) {
-          console.log("✅ Animation finished, all tiles loaded - hiding loader");
+          console.log(
+            "✅ Animation finished, all tiles loaded - hiding loader"
+          );
           setTilesLoading(false);
         }
       }, 600);
@@ -367,7 +424,10 @@ const ViewerCanvas = ({
 
     // Cleanup
     return () => {
-      console.log("🧹 Cleaning up viewer instance for dataset:", dataset ? dataset.id : "unknown");
+      console.log(
+        "🧹 Cleaning up viewer instance for dataset:",
+        dataset ? dataset.id : "unknown"
+      );
 
       // Clear any pending debounce timers
       if (loadingDebounceTimer) {
@@ -375,6 +435,9 @@ const ViewerCanvas = ({
       }
       if (loadingFallbackTimer) {
         clearTimeout(loadingFallbackTimer);
+      }
+      if (backendStatusCheckTimer) {
+        clearTimeout(backendStatusCheckTimer);
       }
 
       // Clear tile loading state
@@ -406,7 +469,6 @@ const ViewerCanvas = ({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataset, viewerSettings]); // Re-initialize only when dataset or viewerSettings changes
-
 
   // Separate effect for settings updates - runs independently of dataset changes
   useEffect(() => {

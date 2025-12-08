@@ -2,6 +2,7 @@ import OpenSeadragon from "openseadragon";
 import { useEffect, useRef, useState } from "react";
 import { API_BASE_URL } from "../../services/api";
 import ComparisonControls from "./ComparisonControls";
+import TileLoadingOverlay from "./TileLoadingOverlay";
 
 const ComparisonView = ({
   dataset,
@@ -16,12 +17,15 @@ const ComparisonView = ({
   setSyncEnabled,
 }) => {
   const [viewersReady, setViewersReady] = useState(false);
+  const [tilesLoading, setTilesLoading] = useState(false);
 
   const viewer1Ref = useRef(null);
   const viewer2Ref = useRef(null);
   const container1Ref = useRef(null);
   const container2Ref = useRef(null);
   const syncHandlersRef = useRef(null);
+  const loadingTilesRef = useRef({ viewer1: new Set(), viewer2: new Set() });
+  let loadingDebounceTimer = useRef(null);
 
   // Create tile source helper with cache busting
   const createTileSource = (ds) => {
@@ -126,6 +130,13 @@ const ComparisonView = ({
         }
         viewer2Ref.current = null;
       }
+
+      // Clear tile loading state
+      loadingTilesRef.current = { viewer1: new Set(), viewer2: new Set() };
+      setTilesLoading(false);
+      if (loadingDebounceTimer.current) {
+        clearTimeout(loadingDebounceTimer.current);
+      }
     };
 
     // Cleanup existing viewers first
@@ -171,6 +182,97 @@ const ComparisonView = ({
       viewer2Ready = true;
       checkReady();
     });
+
+    // Track tile loading for both viewers
+    const setupTileLoadingHandlers = (viewer, viewerName) => {
+      viewer.addHandler("tile-loading", (event) => {
+        if (event.tile) {
+          loadingTilesRef.current[viewerName].add(event.tile);
+          setTilesLoading(true);
+          if (loadingDebounceTimer.current) {
+            clearTimeout(loadingDebounceTimer.current);
+          }
+          console.log(`📥 ${viewerName} tile loading started. Pending: ${loadingTilesRef.current[viewerName].size}`);
+        }
+      });
+
+      viewer.addHandler("tile-loaded", (event) => {
+        if (event.tile) {
+          loadingTilesRef.current[viewerName].delete(event.tile);
+          console.log(`✅ ${viewerName} tile loaded. Remaining: ${loadingTilesRef.current[viewerName].size}`);
+        }
+
+        clearTimeout(loadingDebounceTimer.current);
+        loadingDebounceTimer.current = setTimeout(async () => {
+          const viewer1Tiles = loadingTilesRef.current.viewer1.size;
+          const viewer2Tiles = loadingTilesRef.current.viewer2.size;
+          if (viewer1Tiles === 0 && viewer2Tiles === 0) {
+            console.log("📋 All frontend tiles loaded in both viewers, checking backend status...");
+            
+            // Check backend status for the primary dataset
+            const backendReady = await checkBackendTilesStatus();
+            if (!backendReady) {
+              console.log("⏳ Backend still processing, will check again...");
+            }
+          }
+        }, 800);
+      });
+
+      viewer.addHandler("tile-load-failed", (event) => {
+        if (event.tile) {
+          loadingTilesRef.current[viewerName].delete(event.tile);
+          console.log(`⚠️ ${viewerName} tile failed. Remaining: ${loadingTilesRef.current[viewerName].size}`);
+        }
+
+        clearTimeout(loadingDebounceTimer.current);
+        loadingDebounceTimer.current = setTimeout(async () => {
+          const viewer1Tiles = loadingTilesRef.current.viewer1.size;
+          const viewer2Tiles = loadingTilesRef.current.viewer2.size;
+          if (viewer1Tiles === 0 && viewer2Tiles === 0) {
+            console.log("📋 Tile loading complete (with failures) in both viewers, checking backend status...");
+            
+            // Check backend status for the primary dataset
+            const backendReady = await checkBackendTilesStatus();
+            if (!backendReady) {
+              console.log("⏳ Backend still processing, will check again...");
+            }
+          }
+        }, 800);
+      });
+    };
+
+    // Function to check backend tile fetch status for primary dataset
+    const checkBackendTilesStatus = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/datasets/${dataset.id}/tile-status`
+        );
+        if (response.ok) {
+          const status = await response.json();
+          console.log(
+            `🔍 Backend tile status: ${status.message}`,
+            status
+          );
+
+          // Only hide loader when backend confirms tiles are ready
+          if (status.tiles_ready) {
+            console.log("✅ Backend confirmed all tiles ready, hiding loader");
+            setTilesLoading(false);
+            return true;
+          }
+        }
+      } catch (error) {
+        console.warn("⚠️ Could not check backend tile status:", error);
+      }
+      return false;
+    };
+
+    if (viewer1Ref.current) {
+      setupTileLoadingHandlers(viewer1Ref.current, "viewer1");
+    }
+    if (viewer2Ref.current) {
+      setupTileLoadingHandlers(viewer2Ref.current, "viewer2");
+    }
 
     // Fallback timeout if events don't fire
     readyTimeout = setTimeout(() => {
@@ -474,6 +576,9 @@ const ComparisonView = ({
           </div>
         )}
       </div>
+
+      {/* Tile loading overlay */}
+      <TileLoadingOverlay isLoading={tilesLoading} />
     </div>
   );
 };
