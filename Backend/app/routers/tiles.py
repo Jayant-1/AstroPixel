@@ -3,7 +3,7 @@ Tile serving endpoints
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Path as PathParam
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from pathlib import Path
 import logging
@@ -102,10 +102,25 @@ async def get_tile(
                         logger.info(f"✅ Found JPG alternative")
         
         if tiles_on_r2:
-            # Generate R2 public URL and redirect
+            # Try proxying through backend to add CORS headers; fall back to redirect
+            key = f"tiles/{dataset_id}/{z}/{x}/{y}.{format}"
+            if cloud_storage.client:
+                try:
+                    obj = cloud_storage.client.get_object(Bucket=cloud_storage.bucket_name, Key=key)
+                    body = obj["Body"]
+                    content_type = obj.get("ContentType") or f"image/{format}"
+                    headers = {
+                        "Cache-Control": "public, max-age=31536000",
+                        "Access-Control-Allow-Origin": "*",
+                    }
+                    logger.info(f"🔗 Streaming tile from R2 via proxy: {key}")
+                    return StreamingResponse(body, media_type=content_type, headers=headers)
+                except Exception as e:
+                    logger.warning(f"Proxy stream from R2 failed for {key}: {e}; falling back to redirect")
+
             tile_url = cloud_storage.get_tile_url(dataset_id, z, x, y, format, cache_bust)
             if tile_url:
-                logger.info(f"🔗 Serving tile from R2: {dataset_id}/{z}/{x}/{y}.{format} → {tile_url}")
+                logger.info(f"🔗 Serving tile from R2 via redirect: {dataset_id}/{z}/{x}/{y}.{format} → {tile_url}")
                 return RedirectResponse(
                     url=tile_url,
                     status_code=302,
