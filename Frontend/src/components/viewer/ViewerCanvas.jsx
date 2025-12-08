@@ -291,7 +291,6 @@ const ViewerCanvas = ({
         }
       }, 1500);
     });
-    });
 
     viewerInstance.addHandler("open-failed", (event) => {
       console.error("❌ Viewer failed to open:", event);
@@ -359,7 +358,7 @@ const ViewerCanvas = ({
 
     // Cleanup
     return () => {
-      console.log("🧹 Cleaning up viewer instance for dataset:", dataset?.id);
+      console.log("🧹 Cleaning up viewer instance for dataset:", dataset ? dataset.id : "unknown");
 
       // Clear any pending debounce timers
       if (loadingDebounceTimer) {
@@ -397,7 +396,8 @@ const ViewerCanvas = ({
       setViewer(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataset, viewerSettings.showGrid]); // Re-initialize only when dataset or showGrid changes
+  }, [dataset, viewerSettings]); // Re-initialize only when dataset or viewerSettings changes
+
 
   // Separate effect for settings updates - runs independently of dataset changes
   useEffect(() => {
