@@ -238,7 +238,9 @@ const ViewerCanvas = ({
             return true;
           } else {
             // Backend not ready yet, keep polling
-            console.log(`⏳ Backend status: ${status.processing_status}, polling again in 500ms...`);
+            console.log(
+              `⏳ Backend status: ${status.processing_status}, polling again in 500ms...`
+            );
             if (backendStatusCheckTimer) clearTimeout(backendStatusCheckTimer);
             backendStatusCheckTimer = setTimeout(() => {
               checkBackendTileStatus();
@@ -349,7 +351,9 @@ const ViewerCanvas = ({
       clearTimeout(loadingFallbackTimer);
       loadingFallbackTimer = setTimeout(async () => {
         if (loadingTilesRef.current.size === 0) {
-          console.log("📋 Viewer opened, no pending tiles - checking backend status...");
+          console.log(
+            "📋 Viewer opened, no pending tiles - checking backend status..."
+          );
           // Check backend status before hiding
           await checkBackendTileStatus();
         }

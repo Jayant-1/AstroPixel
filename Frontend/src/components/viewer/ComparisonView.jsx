@@ -262,7 +262,9 @@ const ComparisonView = ({
             return true;
           } else {
             // Backend not ready yet, keep polling
-            console.log(`⏳ Backend status: ${status.processing_status}, polling again in 500ms...`);
+            console.log(
+              `⏳ Backend status: ${status.processing_status}, polling again in 500ms...`
+            );
             setTimeout(() => {
               checkBackendTilesStatus();
             }, 500);
