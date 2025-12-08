@@ -1,5 +1,5 @@
 import { Check, LogIn, UploadCloud, X } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../services/api";
@@ -121,7 +121,7 @@ const FileUploader = ({ onUpload }) => {
         response.id,
         (progress, status, attempts) => {
           if (!isMountedRef.current) return;
-          
+
           const elapsedMinutes = Math.floor((attempts * 3) / 60);
           const elapsedSeconds = (attempts * 3) % 60;
           const timeStr =
@@ -151,7 +151,7 @@ const FileUploader = ({ onUpload }) => {
       );
 
       if (!isMountedRef.current) return;
-      
+
       // Success!
       setSuccess(true);
       setProcessingProgress(100);
@@ -203,14 +203,6 @@ const FileUploader = ({ onUpload }) => {
 
   return (
     <div className="w-full p-6 border-2 border-dashed border-gray-700 rounded-lg bg-gray-800/50 hover:border-blue-500/50 transition-colors">
-      {isLoading && (
-        <div className="w-full h-2 mb-4 bg-gray-700/80 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-fuchsia-500 transition-all duration-500 ease-out"
-            style={{ width: `${displayProgress}%` }}
-          />
-        </div>
-      )}
       {!file ? (
         // File selection
         <label className="flex flex-col items-center gap-3 cursor-pointer">
@@ -345,21 +337,7 @@ const FileUploader = ({ onUpload }) => {
                 </div>
               )}
 
-              {/* Stage 3: R2 Upload Progress Bar - Purple Gradient */}
-              {processingStatus === "uploading_r2" && r2UploadProgress > 0 && (
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-gray-400">
-                    <span>☁️ Stage 3: Uploading to R2 Cloud</span>
-                    <span>{r2UploadProgress}%</span>
-                  </div>
-                  <div className="w-full bg-gray-700 rounded-full h-2.5 overflow-hidden">
-                    <div
-                      className="bg-gradient-to-r from-purple-600 via-purple-500 to-fuchsia-400 h-full transition-all duration-500 ease-out shadow-lg shadow-purple-500/50"
-                      style={{ width: `${r2UploadProgress}%` }}
-                    />
-                  </div>
-                </div>
-              )}
+              {/* Stage 3 progress bar intentionally removed per request */}
             </div>
           )}
 
