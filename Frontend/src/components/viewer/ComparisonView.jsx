@@ -205,8 +205,15 @@ const ComparisonView = ({
           console.log(
             `✅ ${viewerName} tile loaded. Remaining: ${loadingTilesRef.current[viewerName].size}`
           );
-          // Stop loading animation as soon as first tile starts rendering
-          setTilesLoading(false);
+
+          // Stop loading animation once BOTH viewers have at least one tile rendered
+          const viewer1HasTiles = loadingTilesRef.current.viewer1.size === 0;
+          const viewer2HasTiles = loadingTilesRef.current.viewer2.size === 0;
+
+          if (viewer1HasTiles && viewer2HasTiles) {
+            console.log("✅ Both viewers have rendered tiles, hiding loader");
+            setTilesLoading(false);
+          }
         }
       });
 

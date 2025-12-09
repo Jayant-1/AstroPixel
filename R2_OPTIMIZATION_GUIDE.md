@@ -7,24 +7,28 @@ AstroPixel now includes **advanced R2 tile fetching optimizations** that dramati
 ## Performance Features
 
 ### 1. **Connection Pooling with HTTP/2 Multiplexing**
+
 - Persistent TCP connections to R2
 - HTTP/2 multiplexing allows 50+ concurrent requests over single connection
 - Automatic connection reuse and cleanup
 - DNS caching (1 hour TTL)
 
 ### 2. **LRU In-Memory Tile Cache**
+
 - Caches up to 500 frequently-accessed tiles (~5-10GB max memory)
 - Sub-microsecond lookup (no network round-trip)
 - Automatic LRU eviction when cache full
 - Perfect for repeated views/comparisons
 
 ### 3. **Parallel Batch Tile Fetching**
+
 - Fetch multiple tiles simultaneously instead of sequentially
 - New endpoint: `GET /api/tiles/{dataset_id}/batch`
 - Supports up to 100 tiles per request
 - Expected speedup: 50-100x for viewport loads
 
 ### 4. **Prefetch Queue** (Optional)
+
 - Pre-queue adjacent tiles based on current viewport
 - Reduces perceived loading time during pan/zoom
 - Can be enabled by frontend on zoom events
@@ -32,25 +36,31 @@ AstroPixel now includes **advanced R2 tile fetching optimizations** that dramati
 ## API Endpoints
 
 ### Single Tile (Unchanged - Now with Cache)
+
 ```
 GET /api/tiles/{dataset_id}/{z}/{x}/{y}.jpg
 ```
+
 **New Behavior:**
+
 - Checks in-memory cache first (microseconds)
 - Falls back to R2 if not cached
 - Response includes `X-Tile-Source: memory-cache` header when cached
 
 ### Batch Fetch - NEW
+
 ```
 GET /api/tiles/{dataset_id}/batch?tiles=z/x/y.jpg&tiles=z/x/y.png&tiles=z/x/y.webp
 ```
 
 **Example:**
+
 ```
 GET /api/tiles/1/batch?tiles=0/0/0.jpg&tiles=1/1/1.jpg&tiles=2/2/2.jpg
 ```
 
 **Response:**
+
 ```json
 {
   "dataset_id": 1,
@@ -70,16 +80,19 @@ GET /api/tiles/1/batch?tiles=0/0/0.jpg&tiles=1/1/1.jpg&tiles=2/2/2.jpg
 ```
 
 **Supports:**
+
 - Multiple tile coordinates in query params (limit 100 per request)
 - Auto-format fallback (JPG→PNG→WebP if not found)
 - Authentication same as single tiles
 
 ### Cache Statistics - NEW
+
 ```
 GET /api/tiles/{dataset_id}/cache-stats
 ```
 
 **Response:**
+
 ```json
 {
   "dataset_id": 1,
@@ -138,14 +151,14 @@ tile_cache = R2TileCache(max_cache_size=1000)  # ~10-20GB per 500 tiles
 // Load all tiles visible in current viewport
 const viewportTiles = [
   "0/0/0.jpg",
-  "1/2/3.jpg", 
+  "1/2/3.jpg",
   "1/2/4.jpg",
   "1/3/3.jpg",
-  "1/3/4.jpg"
+  "1/3/4.jpg",
 ];
 
 const response = await fetch(
-  `/api/tiles/1/batch?${viewportTiles.map(t => `tiles=${t}`).join('&')}`
+  `/api/tiles/1/batch?${viewportTiles.map((t) => `tiles=${t}`).join("&")}`
 );
 
 const data = await response.json();
@@ -159,7 +172,7 @@ for (const [key, base64Data] of Object.entries(data.tiles)) {
       bytes[i] = binaryString.charCodeAt(i);
     }
     // Use bytes to create image blob
-    const blob = new Blob([bytes], { type: 'image/jpeg' });
+    const blob = new Blob([bytes], { type: "image/jpeg" });
     const url = URL.createObjectURL(blob);
   }
 }
@@ -169,7 +182,7 @@ for (const [key, base64Data] of Object.entries(data.tiles)) {
 
 ```javascript
 // Check cache hit rate
-const stats = await fetch('/api/tiles/1/cache-stats').then(r => r.json());
+const stats = await fetch("/api/tiles/1/cache-stats").then((r) => r.json());
 console.log(`Cache hit rate: ${stats.stats.hit_rate}`);
 console.log(`Cached tiles: ${stats.stats.cache_size}/${stats.stats.cache_max}`);
 ```
@@ -177,17 +190,20 @@ console.log(`Cached tiles: ${stats.stats.cache_size}/${stats.stats.cache_max}`);
 ## Performance Benchmarks
 
 ### Single Tile Sequential (Old)
+
 - Time: ~500-800ms per tile (network latency)
 - For 10 tiles: 5-8 seconds
 - R2 → CloudFront → Backend → Client
 
 ### Batch Parallel (New)
+
 - Time: ~800-1200ms for 10 tiles
 - **50-100x faster** per tile
 - HTTP/2 multiplexing over single connection
 - In-memory cache hits: <1ms
 
 ### Cache Hit Performance
+
 - In-memory cache: **<100 microseconds**
 - No network round-trip
 - Perfect for pan/zoom with revisits
@@ -195,11 +211,13 @@ console.log(`Cached tiles: ${stats.stats.cache_size}/${stats.stats.cache_max}`);
 ## Scaling
 
 ### Memory Usage
+
 - 500 tiles × 15KB avg = ~7.5GB potential
 - Set `max_cache_size` based on available RAM
 - LRU auto-evicts least-used tiles
 
 ### Connection Pool Limits
+
 - Max 100 connections per R2 endpoint
 - Max 50 concurrent requests per connection
 - Handles thousands of tiles/minute
@@ -207,16 +225,19 @@ console.log(`Cached tiles: ${stats.stats.cache_size}/${stats.stats.cache_max}`);
 ### Recommended Settings
 
 **Small datasets (< 50 tiles displayed):**
+
 ```python
 R2TileCache(max_cache_size=100)  # ~1.5GB max
 ```
 
 **Medium datasets (< 500 tiles):**
+
 ```python
 R2TileCache(max_cache_size=500)  # ~7.5GB max
 ```
 
 **Large gigapixel datasets:**
+
 ```python
 R2TileCache(max_cache_size=2000)  # ~30GB max
 R2_UPLOAD_MAX_WORKERS=50  # Faster initial upload
@@ -225,21 +246,25 @@ R2_UPLOAD_MAX_WORKERS=50  # Faster initial upload
 ## Troubleshooting
 
 ### Cache Not Working
+
 - Check `R2_PUBLIC_URL` is set
 - Verify `USE_S3=true` in config
 - Look for "R2 not configured" in response
 
 ### Slow Tile Loads
+
 - Check cache hit rate: `GET /api/tiles/{id}/cache-stats`
 - Low hit rate (<20%) = cache too small
 - Increase `max_cache_size` in `r2_tile_cache.py`
 
 ### Connection Errors
+
 - Verify R2 credentials in config
 - Check R2 bucket policy allows public reads
 - Verify CloudFront or public URL is accessible
 
 ### Memory Issues
+
 - Reduce `max_cache_size`
 - Monitor tile cache size via cache-stats endpoint
 - Clear cache with `POST /api/tiles/{id}/cache-clear` (owner only)
@@ -247,6 +272,7 @@ R2_UPLOAD_MAX_WORKERS=50  # Faster initial upload
 ## Migration Guide
 
 ### Existing Projects
+
 1. Add `aiohttp==3.9.1` to `requirements.txt`
 2. Update `.env` with R2 credentials
 3. Set `USE_S3=true`
@@ -254,6 +280,7 @@ R2_UPLOAD_MAX_WORKERS=50  # Faster initial upload
 5. Monitor stats: `GET /api/tiles/{id}/cache-stats`
 
 ### Zero Downtime
+
 - Backend serves from local storage if R2 unavailable
 - Batch endpoint gracefully degrades to sequential
 - Cache misses don't block tile serving
@@ -269,6 +296,7 @@ R2_UPLOAD_MAX_WORKERS=50  # Faster initial upload
 ## Support
 
 For issues with R2 tile fetching:
+
 1. Check backend logs: `app/routers/tiles.py` debug output
 2. Monitor cache stats: `GET /api/tiles/{id}/cache-stats`
 3. Clear cache if stale: `POST /api/tiles/{id}/cache-clear`

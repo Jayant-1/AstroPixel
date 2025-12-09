@@ -68,8 +68,9 @@ async def get_tiles_batch(
             continue
     
     if tile_list:
-        logger.info(f"📥 Parallel fetch {len(tile_list)} tiles, dataset {dataset_id}")
-        results = await tile_cache.fetch_tiles_parallel(tile_list)
+        logger.info(f"📥 Thread pool fetch {len(tile_list)} tiles, dataset {dataset_id}")
+        # Use high-speed thread pool instead of async
+        results = tile_cache.fetch_tiles_parallel_sync(tile_list)
         
         import base64
         tile_data = {}

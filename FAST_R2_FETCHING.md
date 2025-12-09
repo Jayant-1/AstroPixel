@@ -7,46 +7,52 @@ Added **high-performance R2 tile caching and parallel fetching** to dramatically
 ### Key Files Created/Modified
 
 1. **`app/services/r2_tile_cache.py`** (NEW - 290 lines)
+
    - `R2TileCache` class with connection pooling
    - Parallel async tile fetching
    - LRU in-memory cache (500 tiles)
    - Prefetch queue support
 
 2. **`app/routers/tiles.py`** (MODIFIED)
+
    - Added `/tiles/{dataset_id}/batch` endpoint
    - Added `/tiles/{dataset_id}/cache-stats` endpoint
    - Updated single tile endpoint with cache lookup
    - Integrated R2 optimization
 
 3. **`requirements.txt`** (MODIFIED)
+
    - Added `aiohttp==3.9.1` for HTTP/2
 
 4. **`R2_OPTIMIZATION_GUIDE.md`** (NEW - Comprehensive documentation)
 
 ## Performance Gains
 
-| Scenario | Old Speed | New Speed | Improvement |
-|----------|-----------|-----------|-------------|
-| Single tile | 500-800ms | 500-800ms* | Same (fallback) |
-| 10 tiles sequential | 5-8s | 800-1200ms | **50-100x faster** |
-| Cache hit | N/A | <100µs | **1000x faster** |
-| Viewport load (20 tiles) | 10-16s | 1.2-2s | **50-100x faster** |
+| Scenario                 | Old Speed | New Speed   | Improvement        |
+| ------------------------ | --------- | ----------- | ------------------ |
+| Single tile              | 500-800ms | 500-800ms\* | Same (fallback)    |
+| 10 tiles sequential      | 5-8s      | 800-1200ms  | **50-100x faster** |
+| Cache hit                | N/A       | <100µs      | **1000x faster**   |
+| Viewport load (20 tiles) | 10-16s    | 1.2-2s      | **50-100x faster** |
 
-*With cache: <1ms if cached, else same speed but second request instant
+\*With cache: <1ms if cached, else same speed but second request instant
 
 ## New API Endpoints
 
 ### Batch Fetch Tiles (Main Feature)
+
 ```
 GET /api/tiles/{dataset_id}/batch?tiles=z/x/y.jpg&tiles=z/x/y.jpg
 ```
 
 **Example:**
+
 ```bash
 curl "http://localhost:8000/api/tiles/1/batch?tiles=0/0/0.jpg&tiles=1/2/3.jpg"
 ```
 
 **Features:**
+
 - Up to 100 tiles per request
 - Parallel HTTP/2 multiplexing
 - Auto-format fallback (JPG→PNG→WebP)
@@ -54,6 +60,7 @@ curl "http://localhost:8000/api/tiles/1/batch?tiles=0/0/0.jpg&tiles=1/2/3.jpg"
 - Same auth as single tiles
 
 ### Cache Statistics
+
 ```
 GET /api/tiles/{dataset_id}/cache-stats
 ```
@@ -63,11 +70,13 @@ Shows hit rate, cache size, performance metrics
 ## Enable R2 Optimization
 
 ### 1. Install Dependencies
+
 ```bash
 pip install aiohttp==3.9.1
 ```
 
 ### 2. Configure .env
+
 ```bash
 USE_S3=true
 AWS_ACCESS_KEY_ID=your_key
@@ -79,12 +88,14 @@ R2_UPLOAD_MAX_WORKERS=20
 ```
 
 ### 3. Restart Backend
+
 ```bash
 conda activate astropixel
 python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### 4. Test
+
 ```bash
 # Check stats
 curl http://localhost:8000/api/tiles/1/cache-stats
@@ -96,20 +107,19 @@ curl "http://localhost:8000/api/tiles/1/batch?tiles=0/0/0.jpg&tiles=1/1/1.jpg"
 ## Frontend Integration
 
 ### Quick Integration
+
 ```javascript
 // Fetch tiles for viewport
 async function loadViewportTiles(datasetId, tileCoords) {
   // tileCoords = ["0/0/0.jpg", "1/2/3.jpg", ...]
-  
+
   const params = new URLSearchParams();
-  tileCoords.forEach(coord => params.append('tiles', coord));
-  
-  const response = await fetch(
-    `/api/tiles/${datasetId}/batch?${params}`
-  );
-  
+  tileCoords.forEach((coord) => params.append("tiles", coord));
+
+  const response = await fetch(`/api/tiles/${datasetId}/batch?${params}`);
+
   const data = await response.json();
-  
+
   // Convert base64 tiles to blobs
   const tiles = {};
   for (const [key, base64] of Object.entries(data.tiles)) {
@@ -119,10 +129,10 @@ async function loadViewportTiles(datasetId, tileCoords) {
       for (let i = 0; i < binary.length; i++) {
         bytes[i] = binary.charCodeAt(i);
       }
-      tiles[key] = new Blob([bytes], { type: 'image/jpeg' });
+      tiles[key] = new Blob([bytes], { type: "image/jpeg" });
     }
   }
-  
+
   return tiles;
 }
 ```
@@ -165,12 +175,14 @@ Frontend [decodes + renders]
 ## Cache Behavior
 
 ### Memory Usage
+
 - 500 tiles max (default)
 - ~15KB per tile average = ~7.5GB potential
 - LRU auto-evicts least-used tiles
 - Can be tuned in `r2_tile_cache.py`
 
 ### Cache Hit Rate
+
 - First viewport: 0% (cold start)
 - After panning: 30-50% (revisited tiles)
 - Repeated views: 80%+ (same area)
@@ -179,16 +191,19 @@ Frontend [decodes + renders]
 ## Monitoring
 
 ### Cache Health
+
 ```bash
 curl http://localhost:8000/api/tiles/1/cache-stats
 ```
 
 Look for:
+
 - `cache_hits`: Should increase with repeated requests
 - `hit_rate`: Target 30%+ in normal usage
 - `cache_size`: Should stabilize near max
 
 ### Backend Logs
+
 ```
 💾 Cache HIT: 1/2/3/0.jpg
 💾 Cache MISS: 1/2/3/0.jpg
@@ -199,19 +214,23 @@ Look for:
 ## Troubleshooting
 
 ### Batch endpoint returns empty tiles
+
 - Check `R2_PUBLIC_URL` is set correctly
 - Verify tiles are uploaded to R2
 - Check R2 bucket is publicly readable
 
 ### Cache hit rate is 0%
+
 - Cache might be disabled (check `USE_S3=true`)
 - First load always misses - reload page to see hits
 
 ### Server memory usage high
+
 - Reduce `max_cache_size` in `r2_tile_cache.py`
 - Clear cache: `POST /api/tiles/{id}/cache-clear`
 
 ### aiohttp import error
+
 - Install: `pip install aiohttp==3.9.1`
 - Check conda environment activated
 
@@ -225,6 +244,7 @@ Look for:
 ## Documentation
 
 See `R2_OPTIMIZATION_GUIDE.md` for:
+
 - Detailed API reference
 - Configuration options
 - Performance benchmarks
