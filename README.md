@@ -71,7 +71,9 @@ VITE_API_BASE_URL=http://localhost:8000
 
 - Reference them here:
 ![Viewer](./Frontend/public/viewer.png)`
+
 ![Upload flow](./Frontend/public/upload.png)`
+
 ## Repository Structure
 
 - `Backend/` — FastAPI app, services, routers, Dockerfile
