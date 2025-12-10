@@ -70,8 +70,8 @@ VITE_API_BASE_URL=http://localhost:8000
 ## Screenshots
 
 - Reference them here:
-![Viewer](./Frontend/public/viewer.png)
-![Upload flow](./Frontend/public/upload.png)
+  ![Viewer](./Frontend/public/viewer.png)
+  ![Upload flow](./Frontend/public/upload.png)
 
 ## Repository Structure
 
@@ -80,4 +80,6 @@ VITE_API_BASE_URL=http://localhost:8000
 
 ## License
 
-MIT
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+Copyright (c) 2025 Jayant Sunil Potdar
