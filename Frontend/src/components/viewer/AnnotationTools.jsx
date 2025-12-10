@@ -12,8 +12,6 @@ import { cn } from "../../utils/helpers";
 import Button from "../ui/Button";
 
 const AnnotationTools = () => {
-  console.log("🎨 AnnotationTools component mounted/re-rendered");
-
   const { createAnnotation, selectedDataset } = useApp();
   const [drawMode, setDrawMode] = useState("point"); // point, rectangle
   const [selectedColor, setSelectedColor] = useState("#3b82f6");
@@ -229,24 +227,16 @@ const AnnotationTools = () => {
 
   // Listen for drawing completion
   useEffect(() => {
-    console.log("🎧 AnnotationTools: Setting up event listeners");
-
     const handleDrawingComplete = async (event) => {
-      console.log("📥 AnnotationTools: Drawing complete event received!");
-      console.log("📥 Event detail:", event.detail);
-
       // Just reset UI - ViewerCanvas handles the actual annotation creation
       setIsDrawing(false);
       setLabel("");
-      console.log("✅ AnnotationTools UI reset");
     };
 
     const handleDrawingCancelled = () => {
-      console.log("📥 AnnotationTools: Drawing cancelled event received");
       setIsDrawing(false);
     };
 
-    console.log("🔗 AnnotationTools: Adding event listeners");
     window.addEventListener(
       "annotation-drawing-complete",
       handleDrawingComplete
@@ -257,7 +247,6 @@ const AnnotationTools = () => {
     );
 
     return () => {
-      console.log("🔓 AnnotationTools: Removing event listeners");
       window.removeEventListener(
         "annotation-drawing-complete",
         handleDrawingComplete

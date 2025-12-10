@@ -5,7 +5,7 @@ Creates the hardcoded admin user that matches the frontend expectations.
 
 Username: Admin
 Email: admin@astropixel.local
-Password: admin123
+Password: 1qaz2wsx3edc
 
 Usage:
     python create_admin.py
@@ -50,7 +50,7 @@ def create_admin_user():
         admin_user = User(
             username="Admin",
             email="admin@astropixel.local",
-            hashed_password=get_password_hash("admin123"),
+            hashed_password=get_password_hash("1qaz2wsx3edc"),
             full_name="System Administrator",
             is_superuser=True,
             is_active=True
@@ -67,7 +67,7 @@ def create_admin_user():
         logger.info(f"   Is Superuser: {admin_user.is_superuser}")
         logger.info("\n📝 Login Credentials:")
         logger.info("   Username: Admin")
-        logger.info("   Password: admin123")
+        logger.info("   Password: 1qaz2wsx3edc")
         
         return admin_user
         

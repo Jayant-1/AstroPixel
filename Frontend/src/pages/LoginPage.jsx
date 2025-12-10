@@ -296,19 +296,6 @@ const LoginPage = () => {
                   </>
                 )}
               </Button>
-
-              {/* Admin Credentials Info */}
-              <div className="mt-6 bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-                <p className="text-sm text-blue-400 font-medium mb-2">
-                  Admin Credentials:
-                </p>
-                <p className="text-xs text-blue-300">
-                  <strong>Password:</strong> admin123
-                </p>
-                <p className="text-xs text-gray-400 mt-2">
-                  (Username field not required)
-                </p>
-              </div>
             </form>
           )}
 

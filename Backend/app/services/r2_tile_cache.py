@@ -5,6 +5,7 @@ R2 Tile Caching & Performance Optimization
 - Parallel tile fetches with thread pool
 - LRU in-memory caching
 - Smart retry with exponential backoff
+- Global persistent connection pool for maximum speed
 """
 
 import asyncio
@@ -18,10 +19,42 @@ from threading import Lock, Thread
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import OrderedDict
 import random
+import urllib3
+from urllib3.util.retry import Retry
+from urllib3.util.connection import create_connection
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Global persistent connection pool (created once, reused for all requests)
+# This is the KEY to performance - no pool creation overhead per request
+_GLOBAL_HTTP_POOL = None
+_POOL_LOCK = Lock()
+
+def get_global_http_pool():
+    """Get or create global persistent HTTP pool"""
+    global _GLOBAL_HTTP_POOL
+    if _GLOBAL_HTTP_POOL is None:
+        with _POOL_LOCK:
+            if _GLOBAL_HTTP_POOL is None:
+                logger.info("🌐 Creating global persistent HTTP connection pool")
+                _GLOBAL_HTTP_POOL = urllib3.PoolManager(
+                    maxsize=200,  # Doubled pool size
+                    num_pools=10,  # Multiple pools for better concurrency
+                    headers={
+                        'Connection': 'keep-alive',
+                        'Accept-Encoding': 'gzip, deflate',  # Enable compression
+                    },
+                    timeout=urllib3.Timeout(connect=3, read=10),  # Shorter timeouts
+                    retries=Retry(
+                        total=2,  # Fewer retries for speed
+                        backoff_factor=0.1,  # Faster backoff
+                        status_forcelist=(500, 502, 503, 504)
+                    ),
+                    block=False  # Non-blocking connections
+                )
+    return _GLOBAL_HTTP_POOL
 
 
 class R2TileCache:
@@ -131,11 +164,11 @@ class R2TileCache:
             self.tile_cache[key] = data
             logger.debug(f"💾 Cached tile: {key} ({len(data)} bytes)")
     
-    def fetch_tile_sync(self, url: str, timeout: int = 10, retry: int = 3) -> Optional[bytes]:
+    def fetch_tile_sync(self, url: str, timeout: int = 10, retry: int = 2) -> Optional[bytes]:
         """
-        Fetch tile from R2 synchronously (thread-safe)
+        Fetch tile from R2 synchronously using global persistent pool (ULTRA-FAST)
         
-        Uses urllib3 with connection pooling for faster fetches.
+        Uses global persistent connection pool for zero overhead.
         Runs in thread pool to avoid blocking async loop.
         
         Args:
@@ -149,20 +182,10 @@ class R2TileCache:
         if not url:
             return None
         
-        import urllib3
-        
-        # Create thread-local connection pool (HTTP/2 capable)
-        http = urllib3.PoolManager(
-            maxsize=100,
-            headers={'Connection': 'keep-alive'},
-            retries=urllib3.Retry(
-                total=retry,
-                backoff_factor=0.3,  # Exponential backoff: 0.3s, 0.9s, 2.7s
-                status_forcelist=(500, 502, 503, 504)
-            )
-        )
-        
         try:
+            # Use global persistent pool (no creation overhead!)
+            http = get_global_http_pool()
+            
             # Update concurrent stats
             with self.stats_lock:
                 self.pool_stats['current_concurrent'] += 1
@@ -171,18 +194,24 @@ class R2TileCache:
             
             start_time = time.time()
             
+            # Fetch with minimal overhead
             response = http.request(
                 'GET',
                 url,
-                timeout=urllib3.Timeout(connect=5, read=timeout),
+                timeout=urllib3.Timeout(connect=3, read=timeout),
                 preload_content=True,
-                retries=urllib3.Retry(total=retry, backoff_factor=0.3)
+                retries=Retry(
+                    total=retry,
+                    backoff_factor=0.1,  # Faster: 0.1s, 0.2s
+                    status_forcelist=(500, 502, 503, 504)
+                ),
+                headers={'Accept-Encoding': 'gzip, deflate'}
             )
             
             elapsed = time.time() - start_time
             
             if response.status == 200:
-                logger.debug(f"✅ Fetched tile from R2 in {elapsed:.2f}s: {url}")
+                logger.debug(f"✅ Fetched tile in {elapsed*1000:.0f}ms from R2")
                 
                 # Update stats
                 with self.stats_lock:
@@ -192,11 +221,11 @@ class R2TileCache:
                 
                 return response.data
             else:
-                logger.warning(f"❌ R2 returned {response.status}: {url}")
+                logger.warning(f"❌ R2 returned {response.status}")
                 return None
                 
         except Exception as e:
-            logger.error(f"❌ Error fetching tile: {url} - {e}")
+            logger.error(f"❌ Error fetching tile: {e}")
             return None
         finally:
             with self.stats_lock:

@@ -119,7 +119,7 @@ class CloudStorage:
                     CacheControl='public, max-age=31536000'  # 1 year cache for tiles
                 )
             
-            logger.info(f"✅ Uploaded {local_path.name} to R2: {remote_key}")
+            logger.debug(f"✅ Uploaded {local_path.name} to R2: {remote_key}")
             return True
             
         except Exception as e:

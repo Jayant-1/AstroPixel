@@ -85,33 +85,15 @@ export const AppProvider = ({ children }) => {
   const createAnnotation = useCallback(
     async (annotation) => {
       try {
-        console.log(
-          "🔄 AppContext: Creating annotation via API...",
-          annotation
-        );
-
         const payload = {
           ...annotation,
           dataset_id: selectedDataset.id,
           user_id: "demo-user", // Replace with actual user ID
         };
 
-        console.log(
-          "📦 AppContext: Sending payload to backend:",
-          JSON.stringify(payload, null, 2)
-        );
-
         const created = await api.createAnnotation(payload);
-        console.log(
-          "✅ AppContext: Annotation created, adding to list:",
-          created
-        );
         setAnnotations((prev) => {
           const updated = [...prev, created];
-          console.log(
-            "📋 AppContext: Updated annotations list, total:",
-            updated.length
-          );
           return updated;
         });
         return created;
