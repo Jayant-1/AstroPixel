@@ -21,6 +21,7 @@ from app.routers import (
     annotations_simple,
     auth,
     admin,
+    contact,
 )
 from app.routers.datasets import preview_router
 from app.middleware.rate_limit import RateLimitMiddleware
@@ -153,6 +154,7 @@ app.include_router(
     annotations_simple.router, prefix=settings.API_PREFIX, tags=["Annotations"]
 )
 app.include_router(search.router, prefix=settings.API_PREFIX, tags=["Search"])
+app.include_router(contact.router, tags=["Contact"])
 
 
 @app.get("/")

@@ -1,5 +1,7 @@
 import { motion } from "framer-motion";
 import {
+  AlertCircle,
+  CheckCircle,
   Github,
   Globe,
   Linkedin,
@@ -7,11 +9,55 @@ import {
   MessageCircle,
   Send,
 } from "lucide-react";
+import { useState } from "react";
 import Footer from "../components/landing/Footer";
 import Navbar from "../components/landing/Navbar";
 import SpaceBackground from "../components/landing/SpaceBackground";
+import { sendContactEmail } from "../services/email";
 
 const ContactPage = () => {
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    subject: "",
+    message: "",
+  });
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState(null); // 'success', 'error', or null
+  const [statusMessage, setStatusMessage] = useState("");
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setStatus(null);
+    setStatusMessage("");
+
+    try {
+      await sendContactEmail(formData);
+      setStatus("success");
+      setStatusMessage(
+        "Message sent successfully! Thank you for reaching out."
+      );
+      setFormData({ name: "", email: "", subject: "", message: "" });
+      setTimeout(() => setStatus(null), 5000);
+    } catch (error) {
+      setStatus("error");
+      setStatusMessage(
+        error.message || "Failed to send message. Please try again."
+      );
+      setTimeout(() => setStatus(null), 5000);
+    } finally {
+      setLoading(false);
+    }
+  };
   return (
     <div className="relative min-h-screen overflow-x-hidden">
       <SpaceBackground backgroundImage="/space-bg.jpg" />
@@ -184,23 +230,110 @@ const ContactPage = () => {
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              className="glass-panel p-8 text-center"
+              className="glass-panel p-8"
             >
-              <Send className="w-12 h-12 text-nebula-purple mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-white mb-4">
-                Let's Connect!
+              <h2 className="text-2xl font-bold text-white mb-6 text-center">
+                Send us a Message
               </h2>
-              <p className="text-zinc-400 mb-6">
-                Whether you have feedback, questions, or just want to say hi,
-                I'd love to hear from you.
-              </p>
-              <a
-                href="mailto:jayantpotdar2006@gmail.com?subject=AstroPixel Inquiry"
-                className="gradient-button px-8 py-4 rounded-xl text-white font-semibold inline-flex items-center gap-2"
-              >
-                <Mail size={20} />
-                Send an Email
-              </a>
+
+              {/* Status Messages */}
+              {status === "success" && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-6 p-4 bg-green-500/20 border border-green-500/50 rounded-lg flex items-center gap-3"
+                >
+                  <CheckCircle size={20} className="text-green-500 shrink-0" />
+                  <p className="text-green-300 text-sm">{statusMessage}</p>
+                </motion.div>
+              )}
+
+              {status === "error" && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg flex items-center gap-3"
+                >
+                  <AlertCircle size={20} className="text-red-500 shrink-0" />
+                  <p className="text-red-300 text-sm">{statusMessage}</p>
+                </motion.div>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Name */}
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-2 bg-black/30 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:border-nebula-purple focus:outline-none transition-colors"
+                    placeholder="Your name"
+                  />
+                </div>
+
+                {/* Email */}
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-2 bg-black/30 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:border-nebula-purple focus:outline-none transition-colors"
+                    placeholder="your.email@example.com"
+                  />
+                </div>
+
+                {/* Subject */}
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">
+                    Subject
+                  </label>
+                  <input
+                    type="text"
+                    name="subject"
+                    value={formData.subject}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-2 bg-black/30 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:border-nebula-purple focus:outline-none transition-colors"
+                    placeholder="How can we help?"
+                  />
+                </div>
+
+                {/* Message */}
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">
+                    Message
+                  </label>
+                  <textarea
+                    name="message"
+                    value={formData.message}
+                    onChange={handleInputChange}
+                    required
+                    rows="5"
+                    className="w-full px-4 py-2 bg-black/30 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:border-nebula-purple focus:outline-none transition-colors resize-none"
+                    placeholder="Tell us what's on your mind..."
+                  />
+                </div>
+
+                {/* Submit Button */}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full gradient-button px-8 py-3 rounded-xl text-white font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  <Send size={20} />
+                  {loading ? "Sending..." : "Send Message"}
+                </button>
+              </form>
             </motion.div>
           </div>
         </section>
