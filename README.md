@@ -71,8 +71,8 @@ VITE_API_BASE_URL=http://localhost:8000
 
 - Place images in `Frontend/public/` (e.g., `viewer.png`, `upload.png`).
 - Reference them here:
-  - `![Viewer](public/viewer.png)`
-  - `![Upload flow](public/upload.png)`
+  - `![Viewer](https://github.com/Jayant-1/AstroPixel/blob/main/Frontend/public/viewer.png?raw=true)`
+  - `![Upload flow](https://github.com/Jayant-1/AstroPixel/blob/main/Frontend/public/upload.png?raw=true)`
 
 ## Repository Structure
 
