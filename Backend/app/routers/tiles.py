@@ -315,9 +315,22 @@ async def get_tile(
     }
     media_type = media_type_map.get(format.lower(), f"image/{format}")
     
-    # Optimize headers for high-level tiles (4-7) - they're accessed frequently
+    # ULTRA-optimize headers for high-level tiles (4-7) - small and frequently accessed
     is_high_level = 4 <= z <= 7
-    cache_control = "public, max-age=31536000, immutable" if not is_high_level else "public, max-age=31536000, immutable, stale-while-revalidate=86400"
+    
+    # Different caching strategy for high-level tiles
+    if is_high_level:
+        # Aggressive caching for small tiles
+        cache_control = "public, max-age=31536000, immutable, stale-while-revalidate=604800"
+        # Additional performance headers for small tiles
+        extra_headers = {
+            "X-High-Level-Tile": "true",
+            "X-Tile-Size": "small",
+            "Priority": "u=2, i",  # High priority hint for browsers
+        }
+    else:
+        cache_control = "public, max-age=31536000, immutable"
+        extra_headers = {}
 
     return FileResponse(
         tile_path,
@@ -325,11 +338,12 @@ async def get_tile(
         headers={
             "Cache-Control": cache_control,
             "X-Tile-Status": "exists",
-            "X-Tile-Format": format,  # Indicate actual format served
-            "X-Tile-Level": str(z),  # Help debugging
-            "Access-Control-Allow-Origin": "*",  # Allow CORS for canvas export
+            "X-Tile-Format": format,
+            "X-Tile-Level": str(z),
+            "Access-Control-Allow-Origin": "*",
             "Cross-Origin-Resource-Policy": "cross-origin",
-            "Vary": "Accept-Encoding",  # Enable compression negotiation
+            "Vary": "Accept-Encoding",
+            **extra_headers,  # Add high-level specific headers
         },
     )
 

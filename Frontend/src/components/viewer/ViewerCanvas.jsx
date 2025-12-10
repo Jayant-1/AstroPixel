@@ -39,6 +39,10 @@ const ViewerCanvas = ({
         .indexOf("webp") === 5
   );
 
+  // Request coalescing for small tiles - batch multiple requests
+  const tileRequestQueue = useRef([]);
+  const tileRequestTimer = useRef(null);
+
   // Track settings state for viewer configuration
   const [viewerSettings, setViewerSettings] = useState({
     showGrid: false,
@@ -160,8 +164,10 @@ const ViewerCanvas = ({
 
         // Zoom and pan settings
         animationTime: viewerSettings.animationTime,
-        blendTime: 0.1,
+        blendTime: 0, // Instant tile blending for high-level tiles (no fade)
+        alwaysBlend: false, // Skip blending for better performance
         constrainDuringPan: false,
+        springStiffness: 10.0, // Snappier animations for high levels
         maxZoomPixelRatio: 2,
         minZoomImageRatio: 0.9,
         visibilityRatio: 1.0,
@@ -181,13 +187,22 @@ const ViewerCanvas = ({
         timeout: 60000, // Increased timeout for large tiles
 
         // Tile request optimization
-        maxImageCacheCount: 600, // Increased from 400 for more cached high-level tiles
+        maxImageCacheCount: 800, // Increased from 600 for even more high-level tiles
         minPixelRatio: 0.5, // Load lower res tiles quickly
-        imageLoaderLimit: 12, // Increased from 8 for faster high-level tile loading
+        imageLoaderLimit: 16, // Increased from 12 for ultra-fast high-level tile loading
 
-        // Rendering optimization
+        // AGGRESSIVE optimization for small tiles (levels 4-7)
+        preload: true, // Enable tile preloading
+        collectionMode: true, // Optimize for gigapixel collections
+        wrapHorizontal: false,
+        wrapVertical: false,
+
+        // Rendering optimization - INSTANT for high-level tiles
         useCanvas: true,
         compositeOperation: "source-over",
+        placeholderFillStyle: null, // No placeholder for faster rendering
+        subPixelRoundingForTransparency:
+          OpenSeadragon.SUBPIXEL_ROUNDING_OCCURRENCES.NEVER,
 
         // Prioritize high-level tiles (4-7) for faster zoom-in experience
         tilePriority: function (level, x, y) {
@@ -344,19 +359,33 @@ const ViewerCanvas = ({
       // Skip very low levels and extremely high levels
       if (level < 2 || level > Math.max(0, dataset.max_zoom ?? 15 - 2)) return;
 
-      // For high-level tiles, preload more aggressively (8 neighbors + diagonals)
+      // For high-level tiles, preload even MORE aggressively with prediction
       const tilesToPreload = isHighLevel
         ? [
-            // Adjacent tiles
+            // Adjacent tiles (4)
             [level, x + 1, y],
             [level, x - 1, y],
             [level, x, y + 1],
             [level, x, y - 1],
-            // Diagonal tiles (for high levels only)
+            // Diagonal tiles (4)
             [level, x + 1, y + 1],
             [level, x + 1, y - 1],
             [level, x - 1, y + 1],
             [level, x - 1, y - 1],
+            // Extended neighbors for ultra-smooth panning (8 more)
+            [level, x + 2, y],
+            [level, x - 2, y],
+            [level, x, y + 2],
+            [level, x, y - 2],
+            [level, x + 2, y + 1],
+            [level, x + 2, y - 1],
+            [level, x - 2, y + 1],
+            [level, x - 2, y - 1],
+            // Next zoom level tiles (4) - predictive loading
+            [level + 1, x * 2, y * 2],
+            [level + 1, x * 2 + 1, y * 2],
+            [level + 1, x * 2, y * 2 + 1],
+            [level + 1, x * 2 + 1, y * 2 + 1],
           ]
         : [
             // Standard adjacent tiles for other levels
