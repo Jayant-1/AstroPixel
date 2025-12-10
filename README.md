@@ -70,9 +70,9 @@ VITE_API_BASE_URL=http://localhost:8000
 ## Screenshots
 
 - Reference them here:
-![Viewer](./Frontend/public/viewer.png)`
+![Viewer](./Frontend/public/viewer.png)
 
-![Upload flow](./Frontend/public/upload.png)`
+![Upload flow](./Frontend/public/upload.png)
 
 ## Repository Structure
 
