@@ -32,7 +32,12 @@ async def get_annotations_by_dataset(
     db: Session = Depends(get_db),
 ):
     """
-    Get all annotations for a specific dataset
+    Get all annotations for a specific dataset with pagination
+    
+    Optimizations:
+    - Indexed query on (dataset_id, annotation_type, user_id)
+    - Pagination enabled (default 100 items per page, max 1000)
+    - Database-level filtering to minimize data transfer
 
     - **dataset_id**: ID of the dataset
     - **annotation_type**: Optional filter by type (point, polygon, rectangle, circle)
@@ -40,12 +45,12 @@ async def get_annotations_by_dataset(
     - **skip**: Pagination offset
     - **limit**: Maximum results
     """
-    # Verify dataset exists
+    # Verify dataset exists (fast lookup)
     dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
-    # Query annotations
+    # Build optimized query with filters applied at database level
     query = db.query(Annotation).filter(Annotation.dataset_id == dataset_id)
 
     if annotation_type:
@@ -54,7 +59,8 @@ async def get_annotations_by_dataset(
     if user_id:
         query = query.filter(Annotation.user_id == user_id)
 
-    annotations = query.offset(skip).limit(limit).all()
+    # Apply pagination at database level (more efficient than in-memory)
+    annotations = query.order_by(Annotation.created_at.desc()).offset(skip).limit(limit).all()
 
     # Convert geometry_json to proper format for response
     result = []

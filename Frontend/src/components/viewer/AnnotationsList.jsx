@@ -7,7 +7,7 @@ import {
   Tag,
   Trash2,
 } from "lucide-react";
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useApp } from "../../context/AppContext";
 import { formatDate } from "../../utils/helpers";
 import Button from "../ui/Button";
@@ -30,14 +30,17 @@ const AnnotationsList = () => {
   const [editingId, setEditingId] = useState(null);
   const [editingLabel, setEditingLabel] = useState("");
 
-  const filteredAnnotations = annotations.filter((ann) => {
-    const matchesSearch = ann.label
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
-    const matchesType =
-      filterType === "all" || ann.geometry.type === filterType;
-    return matchesSearch && matchesType;
-  });
+  // Memoize filtered annotations to avoid recalculation on every render
+  const filteredAnnotations = useMemo(() => {
+    return annotations.filter((ann) => {
+      const matchesSearch = ann.label
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase());
+      const matchesType =
+        filterType === "all" || ann.geometry.type === filterType;
+      return matchesSearch && matchesType;
+    });
+  }, [annotations, searchTerm, filterType]);
 
   const handleDelete = async (id, e) => {
     e.stopPropagation();

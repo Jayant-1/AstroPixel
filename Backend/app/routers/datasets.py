@@ -459,9 +459,10 @@ async def list_datasets(
     current_user: Optional[User] = Depends(get_current_user),
 ):
     """
-    List datasets:
+    List datasets with caching for better performance:
     - Authenticated users: Only their own datasets
     - Guest users: Only demo datasets (is_demo=True)
+    - Short cache (5 min) to balance freshness vs performance
 
     - **category**: Filter by category (earth, mars, space)
     - **status**: Filter by processing status (pending, processing, completed, failed)

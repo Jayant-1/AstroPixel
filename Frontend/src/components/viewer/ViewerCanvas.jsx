@@ -29,6 +29,12 @@ const ViewerCanvas = ({
   const { annotations, createAnnotation, hiddenAnnotations } = useApp();
   const [tilesLoading, setTilesLoading] = useState(false);
   const loadingTilesRef = useRef(new Set());
+  
+  // Cache WebP support detection - compute once instead of per tile
+  const webpSupportRef = useRef(
+    typeof window !== "undefined" &&
+      document.createElement("canvas").toDataURL("image/webp").indexOf("webp") === 5
+  );
 
   // Track settings state for viewer configuration
   const [viewerSettings, setViewerSettings] = useState({
@@ -135,13 +141,8 @@ const ViewerCanvas = ({
               ? new Date(dataset.created_at).getTime()
               : Date.now();
 
-            // Detect if browser supports WebP
-            const supportsWebP =
-              document
-                .createElement("canvas")
-                .toDataURL("image/webp")
-                .indexOf("webp") === 5;
-            const tileFormat = supportsWebP ? "webp" : "png";
+            // Use cached WebP detection instead of checking every tile
+            const tileFormat = webpSupportRef.current ? "webp" : "png";
 
             const base = `${API_BASE_URL}/api/tiles/${dataset.id}/${level}/${x}/${y}.${tileFormat}?v=${version}`;
             return token ? `${base}&token=${token}` : base;

@@ -16,8 +16,10 @@ logger = logging.getLogger(__name__)
 engine = create_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
+    pool_size=20,  # Increased from 10 for better concurrency
+    max_overflow=40,  # Doubled from 20 for burst traffic
+    pool_recycle=3600,  # Recycle connections every hour (prevent stale connections)
+    pool_timeout=30,  # Wait up to 30 seconds for a connection
     echo=settings.DEBUG,
 )
 

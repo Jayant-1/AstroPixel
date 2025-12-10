@@ -24,6 +24,7 @@ from app.routers import (
 )
 from app.routers.datasets import preview_router
 from app.middleware.rate_limit import RateLimitMiddleware
+from app.middleware.cache import CacheMiddleware
 from app.services.cleanup import cleanup_scheduler
 
 # Configure Starlette to accept large uploads
@@ -96,6 +97,9 @@ app = FastAPI(
 
 # Rate limiting middleware (add BEFORE CORS)
 app.add_middleware(RateLimitMiddleware)
+
+# Response caching middleware (add BEFORE CORS for better cache control)
+app.add_middleware(CacheMiddleware)
 
 # CORS middleware
 app.add_middleware(
