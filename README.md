@@ -70,8 +70,8 @@ VITE_API_BASE_URL=http://localhost:8000
 ## Screenshots
 
 - Reference them here:
-  - `![Viewer](https://raw.githubusercontent.com/Jayant-1/AstroPixel/main/Frontend/public/viewer.png)`
-  - `![Upload flow](https://raw.githubusercontent.com/Jayant-1/AstroPixel/main/Frontend/public/upload.png)`
+![Viewer](./Frontend/public/viewer.png)`
+![Upload flow](./Frontend/public/upload.png)`
 ## Repository Structure
 
 - `Backend/` — FastAPI app, services, routers, Dockerfile
