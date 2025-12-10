@@ -97,6 +97,46 @@ async def get_cache_stats(dataset_id: int):
     }
 
 
+@router.get("/tiles/{dataset_id}/prefetch/{z}")
+async def prefetch_level_tiles(
+    dataset_id: int = PathParam(..., description="Dataset ID"),
+    z: int = PathParam(..., ge=0, le=30, description="Zoom level to prefetch"),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """
+    Prefetch all tiles at a specific zoom level (optimized for levels 4-7)
+    
+    Returns metadata about the level without loading full tiles.
+    Frontend can then selectively load tiles as needed.
+    
+    - **dataset_id**: ID of the dataset
+    - **z**: Zoom level (recommended for 4-7 for small tiles)
+    """
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    # Calculate tile grid for this zoom level
+    tile_size = dataset.tile_size or 256
+    tiles_x = (dataset.width >> z) // tile_size + 1
+    tiles_y = (dataset.height >> z) // tile_size + 1
+    
+    # For high levels (4-7), provide full tile list for aggressive caching
+    is_high_level = 4 <= z <= 7
+    
+    return {
+        "dataset_id": dataset_id,
+        "level": z,
+        "tiles_x": tiles_x,
+        "tiles_y": tiles_y,
+        "total_tiles": tiles_x * tiles_y,
+        "is_high_level": is_high_level,
+        "recommended_batch_size": 50 if is_high_level else 20,
+        "cache_aggressively": is_high_level,
+    }
+
+
 @router.get("/tiles/{dataset_id}/{z}/{x}/{y}.{format}")
 async def get_tile(
     dataset_id: int = PathParam(..., description="Dataset ID"),
@@ -274,16 +314,22 @@ async def get_tile(
         "webp": "image/webp",
     }
     media_type = media_type_map.get(format.lower(), f"image/{format}")
+    
+    # Optimize headers for high-level tiles (4-7) - they're accessed frequently
+    is_high_level = 4 <= z <= 7
+    cache_control = "public, max-age=31536000, immutable" if not is_high_level else "public, max-age=31536000, immutable, stale-while-revalidate=86400"
 
     return FileResponse(
         tile_path,
         media_type=media_type,
         headers={
-            "Cache-Control": "public, max-age=31536000, immutable",  # 1 year, immutable
+            "Cache-Control": cache_control,
             "X-Tile-Status": "exists",
             "X-Tile-Format": format,  # Indicate actual format served
+            "X-Tile-Level": str(z),  # Help debugging
             "Access-Control-Allow-Origin": "*",  # Allow CORS for canvas export
             "Cross-Origin-Resource-Policy": "cross-origin",
+            "Vary": "Accept-Encoding",  # Enable compression negotiation
         },
     )
 

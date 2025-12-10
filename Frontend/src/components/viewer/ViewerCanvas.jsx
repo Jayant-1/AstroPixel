@@ -181,13 +181,24 @@ const ViewerCanvas = ({
         timeout: 60000, // Increased timeout for large tiles
 
         // Tile request optimization
-        maxImageCacheCount: 400, // Increase from default 100 for gigapixel images
+        maxImageCacheCount: 600, // Increased from 400 for more cached high-level tiles
         minPixelRatio: 0.5, // Load lower res tiles quickly
-        imageLoaderLimit: 8, // Parallel requests (increased from default 4)
+        imageLoaderLimit: 12, // Increased from 8 for faster high-level tile loading
 
         // Rendering optimization
         useCanvas: true,
         compositeOperation: "source-over",
+
+        // Prioritize high-level tiles (4-7) for faster zoom-in experience
+        tilePriority: function (level, x, y) {
+          // Higher priority (lower number) for zoom levels 4-7
+          if (level >= 4 && level <= 7) {
+            return 1; // High priority
+          } else if (level <= 3) {
+            return 2; // Medium priority
+          }
+          return 3; // Normal priority for very high zoom
+        },
 
         // Debug grid (controlled by settings)
         debugMode: viewerSettings.showGrid,
@@ -323,27 +334,56 @@ const ViewerCanvas = ({
       }
     });
 
-    // Preload adjacent tiles for smoother panning
+    // Preload adjacent tiles for smoother panning - OPTIMIZED for high-level tiles
     const preCacheSurroundingTiles = (level, x, y) => {
       if (!viewerInstance) return;
 
-      // Only preload for mid-range zoom levels to avoid overwhelming system
-      if (level < 2 || level > Math.max(0, dataset.max_zoom ?? 15 - 3)) return;
+      // Aggressive preloading for high-level tiles (4-7) - they're small and load fast
+      const isHighLevel = level >= 4 && level <= 7;
 
-      const tilesToPreload = [
-        [level, x + 1, y],
-        [level, x - 1, y],
-        [level, x, y + 1],
-        [level, x, y - 1],
-      ];
+      // Skip very low levels and extremely high levels
+      if (level < 2 || level > Math.max(0, dataset.max_zoom ?? 15 - 2)) return;
+
+      // For high-level tiles, preload more aggressively (8 neighbors + diagonals)
+      const tilesToPreload = isHighLevel
+        ? [
+            // Adjacent tiles
+            [level, x + 1, y],
+            [level, x - 1, y],
+            [level, x, y + 1],
+            [level, x, y - 1],
+            // Diagonal tiles (for high levels only)
+            [level, x + 1, y + 1],
+            [level, x + 1, y - 1],
+            [level, x - 1, y + 1],
+            [level, x - 1, y - 1],
+          ]
+        : [
+            // Standard adjacent tiles for other levels
+            [level, x + 1, y],
+            [level, x - 1, y],
+            [level, x, y + 1],
+            [level, x, y - 1],
+          ];
+
+      // Use WebP for preloading too
+      const format = webpSupportRef.current ? "webp" : "png";
 
       tilesToPreload.forEach(([l, tx, ty]) => {
         if (tx >= 0 && ty >= 0) {
-          const url = `${API_BASE_URL}/api/tiles/${dataset.id}/${l}/${tx}/${ty}.png`;
+          const token = localStorage.getItem("astropixel_token");
+          const version = dataset.updated_at
+            ? new Date(dataset.updated_at).getTime()
+            : dataset.created_at
+            ? new Date(dataset.created_at).getTime()
+            : Date.now();
+          const url = `${API_BASE_URL}/api/tiles/${dataset.id}/${l}/${tx}/${ty}.${format}?v=${version}`;
+          const finalUrl = token ? `${url}&token=${token}` : url;
+
           // Preload in background without blocking
           const img = new Image();
           img.crossOrigin = "Anonymous";
-          img.src = url;
+          img.src = finalUrl;
         }
       });
     };
@@ -386,6 +426,23 @@ const ViewerCanvas = ({
       if (loadingTilesRef.current.size > 0) {
         console.log("🔄 Pan/zoom detected, showing loader again");
         setTilesLoading(true);
+      }
+    });
+
+    // Track current zoom level for intelligent tile management
+    viewerInstance.addHandler("zoom", (event) => {
+      const viewport = viewerInstance.viewport;
+      const zoom = viewport.getZoom(true);
+      const currentLevel = Math.round(Math.log2(zoom));
+
+      // For high zoom levels (4-7), trigger aggressive pre-caching
+      if (currentLevel >= 4 && currentLevel <= 7) {
+        const center = viewport.getCenter(true);
+        const centerTileX = Math.floor(center.x * Math.pow(2, currentLevel));
+        const centerTileY = Math.floor(center.y * Math.pow(2, currentLevel));
+
+        // Pre-cache center and surrounding tiles for smooth experience
+        preCacheSurroundingTiles(currentLevel, centerTileX, centerTileY);
       }
     });
 
