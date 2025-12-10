@@ -69,17 +69,14 @@ VITE_API_BASE_URL=http://localhost:8000
 
 ## Screenshots
 
-- Place images in `Frontend/public/` (e.g., `viewer.png`, `upload.png`).
 - Reference them here:
-  - `![Viewer](public/viewer.png)`
-  - `![Upload flow](public/upload.png)`
+  - `![Viewer](./Frontend/public/viewer.png)`
+  - `![Upload flow](./Frontend/public/upload.png)`
 
 ## Repository Structure
 
 - `Backend/` — FastAPI app, services, routers, Dockerfile
 - `Frontend/` — React/Vite client
-- `.github/` — CI/CD workflow, issue/PR templates
-- Ops docs — `PRODUCTION_READINESS_CHECKLIST.md`, `DEPLOYMENT_CHECKLIST.md`, `CRITICAL_ITEMS.md`, `AUDIT_REPORT.md`
 
 ## License
 
