@@ -10,8 +10,7 @@ from app.routers import (
     annotations_simple,
     auth,
     admin,
-    contact,
 )
 
-__all__ = ["datasets", "tiles", "search", "health", "annotations_simple", "auth", "admin", "contact"]
+__all__ = ["datasets", "tiles", "search", "health", "annotations_simple", "auth", "admin"]
 
