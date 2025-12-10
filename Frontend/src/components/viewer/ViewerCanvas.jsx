@@ -29,11 +29,14 @@ const ViewerCanvas = ({
   const { annotations, createAnnotation, hiddenAnnotations } = useApp();
   const [tilesLoading, setTilesLoading] = useState(false);
   const loadingTilesRef = useRef(new Set());
-  
+
   // Cache WebP support detection - compute once instead of per tile
   const webpSupportRef = useRef(
     typeof window !== "undefined" &&
-      document.createElement("canvas").toDataURL("image/webp").indexOf("webp") === 5
+      document
+        .createElement("canvas")
+        .toDataURL("image/webp")
+        .indexOf("webp") === 5
   );
 
   // Track settings state for viewer configuration

@@ -68,20 +68,23 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   // Load annotations with pagination
-  const loadAnnotations = useCallback(async (datasetId, skip = 0, limit = 100) => {
-    try {
-      setAnnotationsLoading(true);
-      // Add pagination parameters to reduce data transfer for large annotation sets
-      const params = new URLSearchParams({ skip, limit });
-      const data = await api.fetchAnnotations(datasetId);
-      setAnnotations(data);
-    } catch (err) {
-      console.error("Error loading annotations:", err);
-      setAnnotations([]);
-    } finally {
-      setAnnotationsLoading(false);
-    }
-  }, []);
+  const loadAnnotations = useCallback(
+    async (datasetId, skip = 0, limit = 100) => {
+      try {
+        setAnnotationsLoading(true);
+        // Add pagination parameters to reduce data transfer for large annotation sets
+        const params = new URLSearchParams({ skip, limit });
+        const data = await api.fetchAnnotations(datasetId);
+        setAnnotations(data);
+      } catch (err) {
+        console.error("Error loading annotations:", err);
+        setAnnotations([]);
+      } finally {
+        setAnnotationsLoading(false);
+      }
+    },
+    []
+  );
 
   // Create annotation
   const createAnnotation = useCallback(
