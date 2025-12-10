@@ -1,6 +1,6 @@
-# NASA Gigapixel Explorer - Frontend
+# Gigapixel Explorer - Frontend
 
-A production-ready React application for exploring NASA's gigapixel imagery with smooth tile-based zooming, annotation tools, image comparison features, and AI-powered search capabilities.
+A production-ready React application for exploring Gigapixel imagery with smooth tile-based zooming, annotation tools, image comparison features, and AI-powered search capabilities.
 
 ## 🚀 Features
 
@@ -260,4 +260,4 @@ For issues and questions:
 
 ---
 
-Built with ❤️ for NASA Gigapixel Imagery Exploration
+Built with ❤️ for Gigapixel Imagery Exploration

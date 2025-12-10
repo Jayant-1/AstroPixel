@@ -1,5 +1,5 @@
 """
-Memory-efficient tile generator for NASA gigapixel images
+Memory-efficient tile generator for Gigapixel images
 Supports chunked processing with GPU acceleration
 """
 

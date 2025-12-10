@@ -134,10 +134,10 @@ const Home = () => {
             </div>
             <div>
               <h1 className="text-4xl font-bold mb-2">
-                NASA Gigapixel Explorer
+                Gigapixel Explorer
               </h1>
               <p className="text-gray-400">
-                Explore high-resolution imagery from NASA missions with advanced
+                Explore high-resolution imagery from missions with advanced
                 annotation and analysis tools
               </p>
             </div>

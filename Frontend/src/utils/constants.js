@@ -1,6 +1,6 @@
 // Application constants
 
-export const APP_NAME = "NASA Gigapixel Explorer";
+export const APP_NAME = "AstroPixel";
 export const APP_VERSION = "1.0.0";
 
 // API Configuration

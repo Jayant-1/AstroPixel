@@ -1,5 +1,5 @@
 """
-GPU-Accelerated Tile Generator for NASA Gigapixel Images
+GPU-Accelerated Tile Generator for Gigapixel Images
 Optimized for RTX 3050 with 16GB RAM system
 Handles 10GB+ images without crashing
 """
