@@ -126,14 +126,24 @@ const ViewerCanvas = ({
           minLevel: 0,
           maxLevel: maxLevel,
           getTileUrl: function (level, x, y) {
-            // Use png format to match tiles stored in R2
+            // Use WebP format when possible (40% smaller than PNG/JPG)
+            // Falls back to PNG if WebP not available via server fallback
             const token = localStorage.getItem("astropixel_token");
             const version = dataset.updated_at
               ? new Date(dataset.updated_at).getTime()
               : dataset.created_at
               ? new Date(dataset.created_at).getTime()
               : Date.now();
-            const base = `${API_BASE_URL}/api/tiles/${dataset.id}/${level}/${x}/${y}.png?v=${version}`;
+
+            // Detect if browser supports WebP
+            const supportsWebP =
+              document
+                .createElement("canvas")
+                .toDataURL("image/webp")
+                .indexOf("webp") === 5;
+            const tileFormat = supportsWebP ? "webp" : "png";
+
+            const base = `${API_BASE_URL}/api/tiles/${dataset.id}/${level}/${x}/${y}.${tileFormat}?v=${version}`;
             return token ? `${base}&token=${token}` : base;
           },
         },
@@ -161,10 +171,19 @@ const ViewerCanvas = ({
           dblClickToZoom: true,
         },
 
-        // Tile loading settings
-        immediateRender: false,
-        loadTilesWithAjax: false,
-        timeout: 30000,
+        // Tile loading settings - OPTIMIZED FOR PERFORMANCE
+        immediateRender: true, // Render tiles immediately without waiting for all to load
+        loadTilesWithAjax: true, // Use AJAX for better control and faster loading
+        timeout: 60000, // Increased timeout for large tiles
+
+        // Tile request optimization
+        maxImageCacheCount: 400, // Increase from default 100 for gigapixel images
+        minPixelRatio: 0.5, // Load lower res tiles quickly
+        imageLoaderLimit: 8, // Parallel requests (increased from default 4)
+
+        // Rendering optimization
+        useCanvas: true,
+        compositeOperation: "source-over",
 
         // Debug grid (controlled by settings)
         debugMode: viewerSettings.showGrid,
@@ -297,6 +316,42 @@ const ViewerCanvas = ({
         );
         // Stop loading animation as soon as first tile starts rendering
         setTilesLoading(false);
+      }
+    });
+
+    // Preload adjacent tiles for smoother panning
+    const preCacheSurroundingTiles = (level, x, y) => {
+      if (!viewerInstance) return;
+
+      // Only preload for mid-range zoom levels to avoid overwhelming system
+      if (level < 2 || level > Math.max(0, dataset.max_zoom ?? 15 - 3)) return;
+
+      const tilesToPreload = [
+        [level, x + 1, y],
+        [level, x - 1, y],
+        [level, x, y + 1],
+        [level, x, y - 1],
+      ];
+
+      tilesToPreload.forEach(([l, tx, ty]) => {
+        if (tx >= 0 && ty >= 0) {
+          const url = `${API_BASE_URL}/api/tiles/${dataset.id}/${l}/${tx}/${ty}.png`;
+          // Preload in background without blocking
+          const img = new Image();
+          img.crossOrigin = "Anonymous";
+          img.src = url;
+        }
+      });
+    };
+
+    viewerInstance.addHandler("tile-loaded", (event) => {
+      if (event.tile && event.tiledImage) {
+        // Preload nearby tiles for smoother interaction
+        preCacheSurroundingTiles(
+          event.tiledImage.source.maxLevel - event.tile.level,
+          event.tile.x,
+          event.tile.y
+        );
       }
     });
 
